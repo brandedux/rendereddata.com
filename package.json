@@ -1,0 +1,17 @@
+{
+  "name": "rendereddata.com",
+  "version": "1.0.0",
+  "description": "A standalone site and playground for a self-owned maps SDK stack. Dependency-free: no install step, no build step.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node serve.mjs",
+    "serve": "node serve.mjs",
+    "mcp": "node mcp-server.mjs"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

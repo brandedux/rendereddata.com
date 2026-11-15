@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rendered Data — logo</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  body { margin: 0; font: 14px "Inter Tight", system-ui, sans-serif; background: #0b0f14; color: #e8edf2; }
+  h1 { font-weight: 500; font-size: 18px; padding: 20px 24px 4px; }
+  .sub { color: #8a94a6; padding: 0 24px 16px; max-width: 820px; }
+  .row { display: flex; flex-wrap: wrap; gap: 18px; padding: 0 24px 24px; align-items: center; }
+  .tile { border: 1px solid #222b36; border-radius: 14px; display: grid; place-items: center; gap: 10px; padding: 26px; }
+  .tile.dark  { background: #0b0f14; }
+  .tile.light { background: #f4f6f8; color: #0c1016; }
+  .tile.ref   { background: #fff; padding: 0; overflow: hidden; }
+  .tile.ref img { display: block; width: 300px; height: auto; }
+  .cap { font-size: 12px; color: #8a94a6; }
+  .mk { width: 120px; height: 130px; }
+  .nav { display: flex; align-items: center; gap: 10px; padding: 14px 20px; background: #0b0f14; border: 1px solid #1a2029; border-radius: 10px; }
+  .nav .mk { width: 28px; height: 30px; }
+  .nav .name { font-weight: 500; font-size: 18px; letter-spacing: -.01em; }
+  .badge { display: inline-grid; place-items: center; width: 44px; height: 44px; background: #fff; border-radius: 10px; }
+  .badge .mk { width: 30px; height: 32px; color: #0b0f14; }
+</style>
+</head>
+<body>
+<h1>Rendered Data — geometric R·D monogram</h1>
+<p class="sub">Shared stem · squared R bowl (counter = negative-space slot) · straight leg · D = outer curve.
+One weight, thin negative-space channels. Shown next to your reference.</p>
+
+<!-- The monogram, defined once. Stroke-based so the weight + gaps are easy to tune. currentColor. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <g id="rd" fill="none" stroke="currentColor" stroke-width="15" stroke-linejoin="round">
+    <path d="M23 13 V95"/>                                   <!-- shared stem -->
+    <path d="M23 13 H49 A41 41 0 0 1 49 95 H23"/>            <!-- D: shared top edge, outer curve, bottom edge -->
+    <path d="M23 51 H68" stroke-width="13"/>                 <!-- R bowl bottom bar (closes the bowl against the D curve) -->
+    <path d="M33 51 L57 95" stroke-width="13" stroke-linecap="butt"/>  <!-- R leg -->
+  </g>
+</defs></svg>
+
+<div class="row">
+  <div class="tile ref"><img src="rd-logo-reference.jpg" alt="reference"></div>
+  <div class="tile dark"><svg class="mk" viewBox="0 0 100 108"><use href="#rd"/></svg><span class="cap">on dark (nav)</span></div>
+  <div class="tile light"><svg class="mk" viewBox="0 0 100 108"><use href="#rd"/></svg><span class="cap">black on white</span></div>
+</div>
+
+<div class="row">
+  <div class="nav"><svg class="mk" viewBox="0 0 100 108"><use href="#rd"/></svg><span class="name">Rendered Data</span></div>
+  <div class="nav"><span class="badge"><svg class="mk" viewBox="0 0 100 108"><use href="#rd"/></svg></span><span class="name">Rendered Data</span></div>
+  <span class="cap">plain vs white badge (black R on white)</span>
+</div>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thanks — Rendered Data</title>
+<meta name="description" content="Thanks for reaching out to Rendered Data. Your message is on its way and we'll reply by email.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#080b0e">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="design/tokens.css">
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--gv-bg); color: var(--gv-ink); font-family: var(--gv-font-sans);
+    display: grid; place-items: center; text-align: center; padding: 32px; }
+  .wrap { max-width: 540px; }
+  .logo { display: inline-flex; align-items: center; gap: 10px; color: var(--gv-ink); text-decoration: none;
+    font-weight: 600; letter-spacing: -.01em; font-size: 16px; margin-bottom: 40px; }
+  .logo svg { height: 22px; width: auto; }
+  .check { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; margin: 0 auto 22px;
+    background: color-mix(in srgb, var(--gv-accent) 18%, transparent); color: var(--gv-accent); }
+  .check svg { width: 28px; height: 28px; }
+  h1 { font-size: clamp(26px, 5vw, 36px); line-height: 1.1; letter-spacing: -.02em; margin: 0 0 14px; font-weight: 600; }
+  p { color: var(--gv-ink-muted); font-size: 16px; line-height: 1.6; margin: 0 0 32px; }
+  .row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; padding: 11px 20px; border-radius: 9px;
+    font: 500 14px var(--gv-font-sans); text-decoration: none; cursor: pointer; border: 1px solid var(--gv-hairline);
+    color: var(--gv-ink); transition: border-color .15s, background .15s; }
+  .btn:hover { border-color: var(--gv-ink-muted); }
+  .btn--solid { background: var(--gv-accent-btn, var(--gv-accent)); color: var(--gv-ink-on-accent, #fff);
+    border-color: transparent; }
+  .btn--solid:hover { background: var(--gv-accent-btn-hi, var(--gv-accent-hi)); border-color: transparent; }
+</style>
+</head>
+<body>
+  <main class="wrap">
+    <a class="logo" href="/">
+      <svg viewBox="0 0 325 424" fill="currentColor" aria-hidden="true" focusable="false"><path d="M0 0H113A212 212 0 0 1 236.973 383.973L174.332 321.332A130 130 0 0 0 104 82H0ZM0 164H110A48 48 0 0 1 110 260H0ZM0 342H79L161 424H0Z"/></svg>
+      Rendered Data
+    </a>
+    <div class="check" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+    </div>
+    <h1>Thanks — your message is on its way.</h1>
+    <p>We've received it and will reply by email to the address you gave us. In the meantime, feel free to keep exploring.</p>
+    <div class="row">
+      <a class="btn btn--solid" href="/">Back to home</a>
+      <a class="btn" href="/playground.html">Open the playground</a>
+    </div>
+  </main>
+</body>
+</html>

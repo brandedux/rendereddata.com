@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rendered Data Maps SDK: live demo</title>
+<meta name="description" content="A working, self-hosted demo of the Rendered Data Maps SDK: one import, a globe, three worlds, live probes.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="vendor/maplibre-gl/maplibre-gl.css">
+<link rel="stylesheet" href="design/tokens.css">
+<style>
+  html, body { height: 100%; }
+  #app { display: grid; grid-template-columns: 340px 1fr; height: 100%; }
+  #side { background: var(--gv-band); border-right: 1px solid var(--gv-hairline); overflow-y: auto; padding: 20px 18px 36px; }
+  #stage { position: relative; min-width: 0; }
+  #map { position: absolute; inset: 0; background: var(--gv-bg); }
+  h1 { font-size: 17px; margin: 0; font-weight: 500; letter-spacing: -.01em; }
+  .sub { color: var(--gv-ink-muted); font-size: 12.5px; margin: 4px 0 18px; }
+  h2 { font: 400 10.5px var(--gv-font-mono); letter-spacing: .2em; text-transform: uppercase; color: var(--gv-ink-muted);
+    margin: 22px 0 8px; padding-top: 14px; border-top: 1px solid var(--gv-hairline); }
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; }
+  .seg button { flex: 1 0 auto; }
+  button { background: var(--gv-panel); color: var(--gv-ink); border: 1px solid var(--gv-hairline); border-radius: 7px;
+    padding: 7px 11px; font: 400 13px var(--gv-font-sans); cursor: pointer; }
+  button:hover { border-color: var(--gv-ink-muted); }
+  button[aria-pressed="true"] { background: var(--gv-accent); color: var(--gv-ink-on-accent); border-color: var(--gv-accent); font-weight: 500; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  .chk { display: flex; align-items: center; gap: 9px; padding: 6px 0; font-size: 14px; }
+  .chk input { accent-color: var(--gv-accent); width: 15px; height: 15px; }
+  .chk.off { color: var(--gv-ink-muted); }
+  .readout { font: 11.5px var(--gv-font-mono); color: var(--gv-ink-muted); }
+  .readout b { color: var(--gv-ink); font-weight: 400; }
+  .plist { list-style: none; margin: 0; padding: 0; font: 11px var(--gv-font-mono); }
+  .plist li { display: flex; align-items: center; gap: 8px; padding: 3px 0; border-top: 1px solid var(--gv-hairline-soft); }
+  .plist li:first-child { border-top: 0; }
+  .plist .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--gv-ink-muted); }
+  .plist .dot.ok { background: var(--gv-ok); } .plist .dot.fail { background: var(--gv-no); }
+  .plist .name { flex: 1; min-width: 0; color: var(--gv-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .plist .st { color: var(--gv-ink-muted); }
+  .badge { position: absolute; top: 14px; left: 14px; z-index: 2; display: inline-flex; gap: 8px; align-items: center;
+    background: rgba(8,11,16,.72); backdrop-filter: blur(6px); border: 1px solid var(--gv-hairline); border-radius: 999px;
+    padding: 7px 14px; font: 400 11px var(--gv-font-mono); letter-spacing: .1em; }
+  .badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gv-ok); }
+  a.back { color: var(--gv-ink-muted); text-decoration: none; font-size: 12.5px; }
+  a.back:hover { color: var(--gv-accent); }
+  pre.gv-code { margin-top: 10px; font-size: 11.5px; }
+  /* Bottom-sheet scaffolding. No-op on desktop: handle hidden, scroll wrapper transparent. */
+  .gv-sheet-handle { display: none; }
+  .gv-sheet-scroll { display: contents; }
+  @media (max-width: 760px) {
+    #app { display: block; height: 100%; }
+    #stage { position: absolute; inset: 0; }
+    .badge { top: 10px; left: 10px; }
+    .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left { bottom: calc(var(--sheet-peek, 84px) + 2px); }
+    #side.gv-sheet {
+      position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+      height: var(--sheet-peek, 84px); max-height: 85vh; overflow: hidden;
+      border: 0; border-top: 1px solid var(--gv-hairline); border-radius: 16px 16px 0 0;
+      background: rgba(11, 16, 22, .97); backdrop-filter: blur(12px);
+      box-shadow: 0 -10px 34px rgba(0, 0, 0, .55); padding: 0; z-index: 8;
+      transition: height .3s cubic-bezier(.32, .72, 0, 1); touch-action: none;
+    }
+    #side.gv-sheet.dragging { transition: none; }
+    #side.gv-sheet.expanded { height: 85vh; }
+    .gv-sheet-handle {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      position: relative; width: 100%; height: 44px; flex: none;
+      background: transparent; border: 0; border-radius: 16px 16px 0 0; cursor: grab;
+      color: var(--gv-ink-muted); font: 600 10.5px var(--gv-font-mono); letter-spacing: .12em; text-transform: uppercase;
+      touch-action: none;
+    }
+    .gv-sheet-handle:active { cursor: grabbing; }
+    .gv-sheet-grip { position: absolute; top: 9px; left: 50%; transform: translateX(-50%);
+      width: 40px; height: 4px; border-radius: 2px; background: var(--gv-hairline); }
+    .gv-sheet-hint { margin-top: 10px; }
+    .gv-sheet-scroll { display: block; overflow-y: auto; -webkit-overflow-scrolling: touch;
+      height: calc(100% - 44px); padding: 2px 18px 32px; }
+    button { padding: 9px 12px; }
+    .chk { padding: 8px 0; }
+    .chk input { width: 18px; height: 18px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <a class="back" href="index.html#developers/sdk">← Back to the SDK docs</a>
+    <h1 style="margin-top:14px">Rendered Data Maps SDK</h1>
+    <p class="sub">This page is driven entirely by <code>@rendereddata/maps</code>, loaded from <code>src/maps.js</code> in this folder. Every control below is one SDK call.</p>
+
+    <h2>Body</h2>
+    <div class="seg" id="bodies"></div>
+
+    <h2>Projection</h2>
+    <div class="seg" id="proj"></div>
+
+    <h2>Base layer</h2>
+    <div class="seg" id="bases" style="flex-direction:column"></div>
+
+    <h2>Science overlays</h2>
+    <div id="overlays"></div>
+
+    <h2>Bring your own layer</h2>
+    <p class="readout" style="margin:0 0 8px">Drop in a <b>GeoJSON</b>, <b>KML</b>, <b>GPX</b>, <b>PMTiles</b> or <b>GeoTIFF/COG</b> file, or paste a file URL or an <b>{z}/{x}/{y}</b> tile template. Read in the browser. Nothing is uploaded.</p>
+    <label class="chk" style="padding-top:0"><input type="file" id="byo-file" accept=".geojson,.json,.kml,.gpx,.pmtiles,.tif,.tiff,application/geo+json,application/json,application/vnd.google-earth.kml+xml,application/gpx+xml,image/tiff"></label>
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <input id="byo-url" type="text" placeholder="https://…/data.geojson, …/basemap.pmtiles, …/scene.tif  or  {z}/{x}/{y}.png"
+        style="flex:1;min-width:0;background:var(--gv-bg);color:var(--gv-ink);border:1px solid var(--gv-hairline);border-radius:7px;padding:7px 9px;font:13px var(--gv-font-sans)">
+      <button id="byo-add">Add</button>
+    </div>
+    <ul class="plist" id="byo-list" style="margin-top:8px"></ul>
+
+    <h2>Build your own world</h2>
+    <p class="readout" style="margin:0 0 8px">Paint an imaginary planet on the equirectangular template, then wrap it on the globe. Great for speculative worlds, games, anything. Reprojected in the browser; nothing is uploaded.</p>
+    <div class="seg"><button id="world-template">Download template</button></div>
+    <label class="chk" style="padding-top:8px"><input type="file" id="world-file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp">Load a world image</label>
+    <button id="world-clear" style="margin-top:6px">Remove world</button>
+
+    <h2>Place search</h2>
+    <input id="search-box" type="text" placeholder="Search bundled place names…" autocomplete="off"
+      style="width:100%;background:var(--gv-bg);color:var(--gv-ink);border:1px solid var(--gv-hairline);border-radius:7px;padding:7px 9px;font:13px var(--gv-font-sans)">
+    <ul class="plist" id="search-results" style="margin-top:6px"></ul>
+
+    <h2>Draw &amp; measure</h2>
+    <div class="seg"><button id="draw-point">Point</button><button id="draw-line">Line</button><button id="draw-poly">Polygon</button></div>
+    <div class="seg" style="margin-top:6px"><button id="draw-clear">Clear</button><button id="draw-stop">Stop</button></div>
+    <p class="readout" id="draw-readout" style="margin:8px 0 0">Pick a mode, click to add vertices. Double-click or Enter finishes; Esc cancels.</p>
+
+    <h2>Time animation (VIIRS)</h2>
+    <div class="seg"><button id="time-play">Play last 7 days</button><button id="time-stop">Stop</button></div>
+    <p class="readout" id="time-readout" style="margin:8px 0 0">Steps the real NASA VIIRS daily mosaic across recent days.</p>
+
+    <h2>Wind particles</h2>
+    <label class="chk" style="padding-top:0"><input type="checkbox" id="particles-toggle">Animate flow field</label>
+    <p class="readout" style="margin:4px 0 0">Illustrative analytic field, not a live forecast. Pass <code>field(lng,lat)</code> to drive from real data.</p>
+
+    <h2>Celestial sky</h2>
+    <label class="chk" style="padding-top:0"><input type="checkbox" id="star-toggle">Show the sky</label>
+    <div id="star-opts" style="display:none;margin-top:4px">
+      <label class="chk"><input type="checkbox" id="sf-milky" checked>Milky Way</label>
+      <label class="chk"><input type="checkbox" id="sf-const" checked>Constellations</label>
+      <label class="chk"><input type="checkbox" id="sf-bodies" checked>Sun, Moon &amp; planets</label>
+      <label class="chk"><input type="checkbox" id="sf-labels">Star labels</label>
+      <label class="chk"><input type="checkbox" id="sf-grid">RA / Dec grid</label>
+      <label class="chk"><input type="checkbox" id="sf-ecl">Ecliptic</label>
+      <label class="chk"><input type="checkbox" id="sf-term">Day / night terminator</label>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button id="sf-now">Now</button>
+        <input id="sf-time" type="datetime-local" style="flex:1;min-width:0;background:var(--gv-bg);color:var(--gv-ink);border:1px solid var(--gv-hairline);border-radius:6px;padding:5px 7px;font:12px var(--gv-font-mono)">
+      </div>
+    </div>
+    <p class="readout" style="margin:6px 0 0">Real positions from <code>src/celestial.js</code>: J2000 catalogue stars coloured by spectral type, the Milky Way on the galactic plane, and the Sun, Moon and planets by ephemeris. The body is oriented by its IAU pole + prime meridian for the chosen time. Earth, the Moon and Mars appear as <b>clickable hotspots</b> in the sky: click one to fly there and swap the model.</p>
+
+    <h2>Live source probes</h2>
+    <ul class="plist" id="probes"></ul>
+
+    <h2>SDK calls, as you click</h2>
+    <pre class="gv-code" id="log"></pre>
+  </aside>
+
+  <div id="stage">
+    <div class="badge"><span class="dot"></span><span id="status">booting the SDK…</span></div>
+    <div id="map"></div>
+  </div>
+</div>
+
+<script type="module">
+import {GlobeMap} from './src/maps.js';
+import {initBottomSheet} from './src/sheet.js';
+
+const $ = (id) => document.getElementById(id);
+initBottomSheet($('side'));   // mobile: controls become a drag-up bottom sheet
+const logLines = [];
+const logCall = (s) => { logLines.unshift(s); $('log').textContent = logLines.slice(0, 8).join('\n'); };
+
+// ---- helpers (declared before the top-level await so they are live in renderers) ----
+function seg(text, pressed) {
+    const b = document.createElement('button');
+    b.textContent = text; b.setAttribute('aria-pressed', String(!!pressed));
+    return b;
+}
+const cap = (s) => s[0].toUpperCase() + s.slice(1);
+const LABELS = {'base-open': 'GV open basemap', bluemarble: 'Blue Marble', s2: 'Sentinel-2 cloudless 2016',
+    viirs: 'VIIRS true color (daily)', 'moon-wac': 'LRO WAC mosaic', 'mars-viking': 'Viking color mosaic',
+    'mars-mola': 'MOLA shaded relief', borders: 'Borders and country labels', hillshade: 'Hillshade',
+    terrain3d: '3D terrain (pitch the map)', osm: 'Street detail (OSM · quarantined)',
+    quakes: 'Earthquakes, past day (live)'};
+const label = (k) => LABELS[k] || k;
+
+// One import. One object. Everything else is a method call.
+logCall("const map = new GlobeMap({container:'map', body:'earth', base:'base-open'})");
+const map = new GlobeMap({container: 'map', body: 'earth', base: 'base-open'});
+
+map.on('probe', renderProbes);
+map.on('body', () => { renderBodies(); renderBases(); renderOverlays(); });
+map.on('travel', (body) => logCall(`// hotspot clicked -> await map.travelTo('${body}')`));
+map.on('error', (e) => console.warn('[sdk-demo]', e?.message || e));
+
+await map.ready;
+$('status').textContent = `live · MapLibre GL JS ${GlobeMap.version()}`;
+logCall('await map.ready  // manifest loaded, probes run, globe drawn');
+renderAll();
+
+// ---- renderers -----------------------------------------------------------
+function renderAll() { renderBodies(); renderProj(); renderBases(); renderOverlays(); renderProbes(); }
+
+function renderBodies() {
+    $('bodies').replaceChildren(...map.bodies.map((b) => {
+        const btn = seg(cap(b), map.body === b);
+        btn.onclick = async () => { logCall(`await map.setBody('${b}')`); await map.setBody(b); renderAll(); };
+        return btn;
+    }));
+}
+function renderProj() {
+    $('proj').replaceChildren(...['globe', 'mercator'].map((p) => {
+        const btn = seg(p, map.projection === p);
+        btn.onclick = async () => { logCall(`await map.setProjection('${p}')`); await map.setProjection(p); renderProj(); };
+        return btn;
+    }));
+}
+function renderBases() {
+    $('bases').replaceChildren(...map.basesFor().map((key) => {
+        const ok = map.usable(key);
+        const btn = seg(label(key) + (ok ? '' : '  · probe failed'), map._base === key);
+        btn.disabled = !ok;
+        btn.onclick = async () => { logCall(`await map.setBase('${key}')`); await map.setBase(key); renderBases(); };
+        return btn;
+    }));
+}
+function renderOverlays() {
+    const ov = map.overlaysFor();
+    $('overlays').replaceChildren(...ov.map((key) => {
+        const ok = map.usable(key);
+        const wrap = document.createElement('label');
+        wrap.className = 'chk' + (ok ? '' : ' off');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.disabled = !ok; cb.checked = map._overlays.has(key);
+        cb.onchange = async () => {
+            logCall(`await map.addLayer('${key}'${cb.checked ? '' : ', {on:false}'})`);
+            try { await map.addLayer(key, {on: cb.checked}); }
+            catch (err) { cb.checked = false; console.warn(err.message); }
+        };
+        wrap.append(cb, document.createTextNode(label(key) + (ok ? '' : ' · probe failed')));
+        return wrap;
+    }) || []);
+    if (!ov.length) $('overlays').innerHTML = '<p class="readout">No overlays for this body.</p>';
+}
+function renderProbes() {
+    const entries = Object.values(map.probes);
+    if (!entries.length) return;
+    $('probes').replaceChildren(...entries.map((p) => {
+        const li = document.createElement('li');
+        const dot = document.createElement('span'); dot.className = 'dot ' + (p.state === 'ok' ? 'ok' : p.state === 'fail' ? 'fail' : '');
+        const name = document.createElement('span'); name.className = 'name'; name.textContent = p.label || p.id;
+        li.append(dot, name);
+        if (p.state !== 'ok') { const st = document.createElement('span'); st.className = 'st'; st.textContent = p.state; li.append(st); }
+        return li;
+    }));
+}
+
+// ---- bring your own layer ------------------------------------------------
+map.on('userlayer', renderUserLayers);
+async function addUser(input, labelText) {
+    try { await map.addUserLayer(input); logCall(`await map.addUserLayer(${labelText})`); }
+    catch (err) { console.warn(err.message); flashByoError(err.message); }
+}
+$('byo-file').addEventListener('change', (e) => {
+    const f = e.target.files[0];
+    if (f) addUser(f, `<${f.name}>`);
+    e.target.value = '';
+});
+$('byo-add').addEventListener('click', () => {
+    const url = $('byo-url').value.trim();
+    if (url) { addUser(url, `'${url.length > 40 ? url.slice(0, 40) + '…' : url}'`); $('byo-url').value = ''; }
+});
+$('byo-url').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('byo-add').click(); });
+
+// ---- build your own world ------------------------------------------------
+$('world-template').addEventListener('click', () => {
+    GlobeMap.sphereTemplate({ width: 2048 }).toBlob((b) => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(b); a.download = 'planet-template.png'; a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    });
+    logCall('GlobeMap.sphereTemplate() -> download PNG');
+});
+$('world-file').addEventListener('change', async (e) => {
+    const f = e.target.files[0];
+    if (f) { try { await map.addUserWorld(f); logCall(`await map.addUserWorld(<${f.name}>)`); } catch (err) { flashByoError(err.message); } }
+    e.target.value = '';
+});
+$('world-clear').addEventListener('click', () => { map.removeUserWorld(); logCall('map.removeUserWorld()'); });
+
+function renderUserLayers() {
+    const layers = map.userLayers();
+    $('byo-list').replaceChildren(...layers.map((d) => {
+        const li = document.createElement('li');
+        const dot = document.createElement('span'); dot.className = 'dot ok';
+        const name = document.createElement('span'); name.className = 'name';
+        name.textContent = `${d.origin} · ${d.kind}`; name.title = d.license;
+        const x = document.createElement('button');
+        x.textContent = '×'; x.style.cssText = 'padding:0 7px;line-height:1.4';
+        x.onclick = () => { map.removeUserLayer(d.id); renderUserLayers(); logCall(`map.removeUserLayer('${d.id}')`); };
+        li.append(dot, name, x);
+        return li;
+    }));
+}
+function flashByoError(msg) {
+    const el = $('byo-list');
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="dot fail"></span><span class="name" style="color:var(--gv-no)">${msg}</span>`;
+    el.prepend(li);
+    setTimeout(() => li.remove(), 6000);
+}
+
+// ---- place search --------------------------------------------------------
+$('search-box').addEventListener('input', (e) => {
+    const results = map.search(e.target.value, {limit: 8});
+    $('search-results').replaceChildren(...results.map((r) => {
+        const li = document.createElement('li');
+        const dot = document.createElement('span'); dot.className = 'dot ok';
+        const name = document.createElement('span'); name.className = 'name'; name.textContent = r.name;
+        li.append(dot, name);
+        li.style.cursor = 'pointer';
+        li.onclick = () => { map.flyToPlace(r); logCall(`map.flyToPlace(map.search('${r.name}')[0])`); };
+        return li;
+    }));
+});
+
+// ---- draw & measure ------------------------------------------------------
+let draw = null;
+function startDraw(mode) {
+    draw = map.draw({mode});
+    logCall(`const draw = map.draw({mode:'${mode}'})`);
+    draw.on('finish', (f) => {
+        const p = f.properties;
+        const m = p.area_km2 != null ? `polygon · ${p.area_km2.toLocaleString()} km²`
+            : p.length_km != null ? `line · ${p.length_km.toLocaleString()} km` : 'point';
+        $('draw-readout').textContent = `Finished ${m}. Keep drawing or Stop.`;
+    });
+    for (const [id, m] of [['draw-point','point'],['draw-line','linestring'],['draw-poly','polygon']])
+        $(id).setAttribute('aria-pressed', String(m === mode));
+}
+$('draw-point').onclick = () => startDraw('point');
+$('draw-line').onclick = () => startDraw('linestring');
+$('draw-poly').onclick = () => startDraw('polygon');
+$('draw-clear').onclick = () => { draw?.clear(); logCall('draw.clear()'); };
+$('draw-stop').onclick = () => {
+    draw?.stop(); draw = null; logCall('draw.stop()');
+    for (const id of ['draw-point','draw-line','draw-poly']) $(id).setAttribute('aria-pressed', 'false');
+    $('draw-readout').textContent = 'Stopped.';
+};
+
+// ---- time animation ------------------------------------------------------
+let timePlayer = null;
+$('time-play').onclick = async () => {
+    if (map.body !== 'earth') { $('time-readout').textContent = 'Switch to Earth first.'; return; }
+    try { await map.setBase('viirs'); renderBases(); } catch { $('time-readout').textContent = 'VIIRS probe not available right now.'; return; }
+    timePlayer?.stop();
+    logCall("map.playTimesteps('viirs', {days:7})");
+    timePlayer = map.playTimesteps('viirs', {days: 7, intervalMs: 900, onStep: (day) => { $('time-readout').textContent = `VIIRS true color · ${day}`; }});
+    $('time-play').setAttribute('aria-pressed', 'true');
+};
+$('time-stop').onclick = () => { timePlayer?.stop(); timePlayer = null; $('time-play').setAttribute('aria-pressed', 'false'); };
+
+// ---- wind particles ------------------------------------------------------
+let particles = null;
+$('particles-toggle').addEventListener('change', (e) => {
+    if (e.target.checked) { particles = map.addParticles({count: 2000}); logCall('map.addParticles({count:2000})'); }
+    else { map.removeParticles(); particles = null; logCall('map.removeParticles()'); }
+});
+
+// ---- celestial sky -------------------------------------------------------
+const sfFlags = () => ({
+    milkyWay: $('sf-milky').checked, constellations: $('sf-const').checked,
+    sun: $('sf-bodies').checked, moon: $('sf-bodies').checked, planets: $('sf-bodies').checked,
+    starLabels: $('sf-labels').checked, grid: $('sf-grid').checked, ecliptic: $('sf-ecl').checked
+});
+const sfTime = () => ($('sf-time').value ? new Date($('sf-time').value) : new Date());
+let denseCatalog = null;
+const loadCatalog = async () => {
+    if (denseCatalog) return denseCatalog;
+    try { denseCatalog = await (await fetch(new URL('data/stars.json', location.href))).json(); } catch { denseCatalog = null; }
+    return denseCatalog;
+};
+$('star-toggle').addEventListener('change', async (e) => {
+    if (e.target.checked) {
+        $('star-opts').style.display = 'block';
+        const cat = await loadCatalog();
+        await map.addStarfield({ time: sfTime(), catalog: cat || undefined, ...sfFlags() });
+        logCall(`await map.addStarfield({ catalog: ${cat ? cat.length + ' stars' : 'built-in'}, ...layers })`);
+        if ($('sf-term').checked) await map.addTerminator({ time: sfTime() });
+    } else {
+        $('star-opts').style.display = 'none';
+        map.removeStarfield(); map.removeTerminator(); logCall('map.removeStarfield()');
+    }
+});
+for (const [id, key] of [['sf-milky','milkyWay'],['sf-const','constellations'],['sf-labels','starLabels'],['sf-grid','grid'],['sf-ecl','ecliptic']])
+    $(id).addEventListener('change', (e) => map._starfield?.set(key, e.target.checked));
+$('sf-bodies').addEventListener('change', (e) => { for (const k of ['sun','moon','planets']) map._starfield?.set(k, e.target.checked); });
+$('sf-term').addEventListener('change', async (e) => {
+    if (e.target.checked) { await map.addTerminator({ time: sfTime() }); logCall('await map.addTerminator()'); }
+    else { map.removeTerminator(); logCall('map.removeTerminator()'); }
+});
+$('sf-now').addEventListener('click', () => { $('sf-time').value = ''; map._starfield?.setTime(new Date()); map._terminator?.setTime(new Date()); });
+$('sf-time').addEventListener('change', () => { const t = sfTime(); map._starfield?.setTime(t); map._terminator?.setTime(t); });
+
+window.gvSdkMap = map;   // for poking at it from the console
+</script>
+</body>
+</html>

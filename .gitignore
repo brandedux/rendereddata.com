@@ -147,3 +147,13 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Rendered Data runtime data & secrets — never commit or deploy to a static/edge host.
+# serve.mjs refuses to serve these locally; static hosts (GitHub Pages, Vercel) would not.
+leads/
+usage.json
+keys.json
+
+# macOS
+.DS_Store
+old-package-lock.json

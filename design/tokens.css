@@ -1,0 +1,140 @@
+/* Fonts are self-hosted (SIL OFL 1.1), Latin subset, so no page here calls a font CDN. */
+
+@font-face { font-family: "Inter Tight"; src: url("fonts/InterTight-var.woff2") format("woff2");
+  font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/JetBrainsMono-var.woff2") format("woff2");
+  font-weight: 100 800; font-style: normal; font-display: swap; }
+
+:root {
+  color-scheme: dark;
+
+  /* surfaces */
+  --gv-bg: #080b0e;
+  --gv-band: #0d1216;
+  --gv-band-peak: #10171c;
+  --gv-panel: #11161b;
+  --gv-panel-hi: #1a222a;
+  --gv-hairline: rgba(255, 255, 255, .1);
+  --gv-hairline-soft: rgba(255, 255, 255, .07);
+
+  /* ink */
+  --gv-ink: #eef3f1;
+  --gv-ink-muted: #9aa6a3;
+  --gv-ink-on-accent: #ffffff;
+
+  /* accent — Apple-style system blue (dark mode) */
+  --gv-accent: #0a84ff;
+  --gv-accent-hi: #409cff;
+  --gv-accent-soft: rgba(10, 132, 255, .4);
+  /* Deeper, less-neon green for large filled CTAs so they don't glare on the dark page.
+     The bright --gv-accent stays for thin accents (links, labels, underlines). */
+  --gv-accent-btn: #0a84ff;
+  --gv-accent-btn-hi: #2b93ff;
+  --gv-aurora: linear-gradient(100deg, #0a84ff 0%, #22d3ee 38%, #818cf8 68%, #c084fc 100%);
+
+  /* status (extension for the Maps product: license flags and probe states) */
+  --gv-ok: #4ade80;
+  --gv-review: #e3b04b;
+  --gv-no: #f0736a;
+  --gv-planned: #c084fc;
+
+  /* type */
+  --gv-font-sans: "Inter Tight", Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --gv-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* layout */
+  --gv-max: 1200px;
+  --gv-gutter: 32px;
+  --gv-section: 96px;
+  --gv-nav-h: 72px;
+  --gv-radius-ctl: 10px;
+  --gv-radius-shot: 14px;
+  --gv-radius-card: 16px;
+  --gv-radius-cta: 28px;
+
+  /* motion */
+  --gv-ease: cubic-bezier(.2, .7, .1, 1);
+}
+@media (max-width: 720px) { :root { --gv-gutter: 20px; --gv-section: 72px; } }
+
+/* ---------- base ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; background: var(--gv-bg); color: var(--gv-ink); font-family: var(--gv-font-sans);
+  font-size: 17px; font-weight: 300; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+p { margin: 0; }
+a { color: inherit; }
+a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--gv-accent); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+
+/* ---------- type ---------- */
+.gv-h1 { font-size: clamp(40px, 5.6vw, 76px); line-height: 1.02; font-weight: 300; letter-spacing: -.04em; }
+.gv-h2 { font-size: clamp(34px, 4.4vw, 58px); line-height: 1.06; font-weight: 300; letter-spacing: -.035em; }
+.gv-h3 { font-size: 24px; line-height: 1.2; font-weight: 400; letter-spacing: -.02em; }
+.gv-lede { font-size: 19px; color: var(--gv-ink-muted); max-width: 56ch; }
+.gv-eyebrow { font-family: var(--gv-font-mono); font-size: 11px; letter-spacing: .3em; text-transform: uppercase; color: var(--gv-ink-muted); }
+.gv-label { font-family: var(--gv-font-mono); font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: var(--gv-accent); }
+.gv-micro { font-size: 13px; color: var(--gv-ink-muted); }
+.gv-accent-ink { color: var(--gv-accent); }
+.gv-placeholder { font-weight: 600; color: var(--gv-review); } /* unverified values: always bold, always in [brackets] */
+
+/* ---------- layout ---------- */
+.gv-wrap { max-width: var(--gv-max); margin: 0 auto; padding-inline: var(--gv-gutter); }
+.gv-section { padding-block: var(--gv-section); }
+.gv-band { background: linear-gradient(180deg, var(--gv-bg) 0%, var(--gv-band) 22%, var(--gv-band-peak) 50%, var(--gv-band) 78%, var(--gv-bg) 100%); }
+.gv-head { display: flex; flex-direction: column; gap: 20px; max-width: 760px; }
+.gv-head p { color: var(--gv-ink-muted); font-size: 18px; }
+
+/* ---------- buttons ---------- */
+.gv-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 0 28px;
+  border-radius: var(--gv-radius-ctl); background: transparent; border: 1px solid var(--gv-accent); color: var(--gv-ink);
+  font: 500 15px var(--gv-font-sans); text-decoration: none; cursor: pointer; transition: background .2s, color .2s; }
+.gv-btn:hover { background: var(--gv-accent-btn); color: var(--gv-ink-on-accent); border-color: var(--gv-accent-btn); }
+.gv-btn--solid { background: var(--gv-accent-btn); color: var(--gv-ink-on-accent); border-color: var(--gv-accent-btn); }
+.gv-btn--solid:hover { background: var(--gv-accent-btn-hi); border-color: var(--gv-accent-btn-hi); }
+.gv-btn--sm { min-height: 40px; padding: 0 16px; font-size: 14px; font-weight: 400; }
+.gv-btn--ghost { border-color: var(--gv-hairline); }
+.gv-btn--ghost:hover { background: var(--gv-panel-hi); color: var(--gv-ink); border-color: var(--gv-ink-muted); }
+.gv-link { color: var(--gv-ink); text-decoration: none; font-size: 15px; border-bottom: 1px solid rgba(238, 243, 241, .3); padding-bottom: 2px; }
+.gv-link:hover { border-bottom-color: var(--gv-accent); }
+
+/* ---------- surfaces ---------- */
+.gv-card { background: var(--gv-panel); border: 1px solid var(--gv-hairline); border-radius: var(--gv-radius-card);
+  padding: 24px; display: flex; flex-direction: column; gap: 12px; min-width: 0;
+  transition: border-color .6s var(--gv-ease), transform .6s var(--gv-ease); }
+.gv-card--hover:hover { border-color: var(--gv-accent-soft); transform: translateY(-3px); }
+.gv-card p { color: var(--gv-ink-muted); font-size: 16px; }
+.gv-code { margin: 0; background: #0b0f13; border: 1px solid var(--gv-hairline-soft); border-radius: var(--gv-radius-shot);
+  padding: 18px 20px; overflow-x: auto; font: 400 13px/1.65 var(--gv-font-mono); color: #d5ddda; tab-size: 2; }
+.gv-code .c { color: #6f7c79; } .gv-code .s { color: #86efac; } .gv-code .k { color: #93c5fd; }
+
+/* ---------- tags ---------- */
+.gv-tag { display: inline-flex; align-items: center; gap: 6px; font: 400 10px var(--gv-font-mono); letter-spacing: .12em;
+  text-transform: uppercase; padding: 3px 8px; border-radius: 6px; border: 1px solid currentColor; white-space: nowrap; }
+.gv-tag--live { color: var(--gv-ok); }
+.gv-tag--planned { color: var(--gv-planned); border-style: dashed; }
+.gv-tag--review { color: var(--gv-review); }
+.gv-tag--no { color: var(--gv-no); }
+.gv-tag--muted { color: var(--gv-ink-muted); }
+
+/* ---------- nav and tabs ---------- */
+.gv-nav { position: sticky; top: 0; z-index: 20; background: rgba(8, 11, 14, .82); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--gv-hairline-soft); }
+.gv-nav .gv-wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: var(--gv-nav-h); max-width: none; }
+.gv-logo { display: flex; align-items: center; gap: 9px; font-weight: 500; font-size: 17px; text-decoration: none; white-space: nowrap; }
+/* R·D monogram (inline SVG, design/logo.svg), sized to sit beside the wordmark. */
+.gv-logo-mark { display: block; flex: none; height: 26px; width: auto; }
+.gv-tabs { display: flex; gap: 4px; }
+.gv-tab { background: none; border: 0; color: var(--gv-ink-muted); font: 400 15px var(--gv-font-sans); padding: 10px 14px;
+  border-radius: var(--gv-radius-ctl); cursor: pointer; position: relative; }
+.gv-tab:hover { color: var(--gv-ink); }
+.gv-tab[aria-selected="true"] { color: var(--gv-ink); }
+.gv-tab[aria-selected="true"]::after { content: ""; position: absolute; left: 14px; right: 14px; bottom: 2px; height: 2px;
+  border-radius: 2px; background: var(--gv-aurora); }
+
+/* ---------- table ---------- */
+.gv-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.gv-table th { text-align: left; font: 400 11px var(--gv-font-mono); letter-spacing: .14em; text-transform: uppercase;
+  color: var(--gv-ink-muted); padding: 10px 12px 10px 0; border-bottom: 1px solid var(--gv-hairline); }
+.gv-table td { padding: 12px 12px 12px 0; border-bottom: 1px solid var(--gv-hairline-soft); vertical-align: top; }
+.gv-table td.num, .gv-table td code { font-family: var(--gv-font-mono); font-size: 13px; }

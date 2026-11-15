@@ -1,0 +1,4 @@
+# Server-only / sensitive files that must never be served as static assets.
+leads/
+usage.json
+keys.json

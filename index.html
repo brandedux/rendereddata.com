@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rendered Data Maps: science layers on a globe, for any world</title>
+<meta name="description" content="A self-hostable globe for weather, geoscience and planetary data. Every layer carries its license and is probed live before it loads.">
+<meta name="theme-color" content="#080b0e">
+<!-- Social preview (Open Graph + Twitter). og:image is relative; set an absolute URL in production. -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Rendered Data — build planetary maps for any world">
+<meta property="og:description" content="An open, self-hostable globe for Earth, the Moon, Mars, and every world after. No key, no signup, open source.">
+<meta property="og:image" content="og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Rendered Data — build planetary maps for any world">
+<meta name="twitter:description" content="An open, self-hostable globe for Earth, the Moon, Mars, and every world after. No key, no signup, open source.">
+<meta name="twitter:image" content="og-image.png">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<meta name="theme-color" content="#080b0e">
+<link rel="stylesheet" href="vendor/maplibre-gl/maplibre-gl.css">
+<link rel="stylesheet" href="design/tokens.css">
+<style>
+  /* Page-level layout only. Colors, type and components come from design/tokens.css. */
+  html { scroll-behavior: smooth; }
+  [data-view][hidden] { display: none !important; }
+  .stack { display: flex; flex-direction: column; gap: 20px; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .grid3 > *, .split > *, .dev > *, .hero .gv-wrap > *, .steps > * { min-width: 0; }
+
+  /* hero */
+  .hero { position: relative; isolation: isolate; overflow: hidden; }
+  .hero::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+    background: radial-gradient(1100px 520px at 30% -12%, rgba(34,197,94,.12), transparent 70%); }
+  .hero .gv-wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; align-items: center;
+    padding-block: 72px 56px; }
+  .globe-frame { position: relative; aspect-ratio: 1; width: 100%; max-width: 560px; justify-self: end; }
+  #hero-globe { position: absolute; inset: 0;
+    background: radial-gradient(circle at 50% 46%, rgba(6,10,18,.92) 0%, rgba(4,6,12,.5) 52%, transparent 78%); }
+  #hero-globe .maplibregl-ctrl-bottom-right { display: none; }
+  .globe-cap { position: absolute; left: 0; right: 0; bottom: -6px; text-align: center; }
+
+  /* stat strip */
+  .stats { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--gv-hairline);
+    border-radius: var(--gv-radius-card); overflow: hidden; background: var(--gv-panel); }
+  .stat { padding: 20px 22px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .stat + .stat { border-left: 1px solid var(--gv-hairline-soft); }
+  .stat b { font-size: 34px; font-weight: 300; letter-spacing: -.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .stat span { font: 400 10.5px var(--gv-font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--gv-ink-muted); }
+
+  /* grids */
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 48px; }
+  .split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; align-items: start; }
+  .flist { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; }
+  .flist li { border-top: 1px solid var(--gv-hairline-soft); }
+  .flist a { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0;
+    text-decoration: none; font-size: 15px; }
+  .flist a:hover { color: var(--gv-accent-hi); }
+  .price b { font-size: 30px; font-weight: 300; letter-spacing: -.02em; }
+  .steps { counter-reset: s; list-style: none; padding: 0; margin: 36px 0 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .steps li { counter-increment: s; }
+  .steps li::before { content: "0" counter(s); font: 400 11px var(--gv-font-mono); letter-spacing: .22em; color: var(--gv-accent); }
+
+  /* strata: the "as above, so below" vertical story */
+  .strata { list-style: none; margin: 40px 0 0; padding: 0; border: 1px solid var(--gv-hairline);
+    border-radius: var(--gv-radius-card); overflow: hidden;
+    background: linear-gradient(180deg, #05060c 0%, #0a1626 26%, #0e2434 48%, #13231a 70%, #06120e 88%, #040d0b 100%); }
+  .stratum { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 24px; padding: 24px 28px;
+    border-top: 1px solid rgba(255, 255, 255, .07); align-items: baseline; }
+  .stratum:first-child { border-top: 0; }
+  .stratum .lvl { font: 400 10.5px var(--gv-font-mono); letter-spacing: .18em; text-transform: uppercase;
+    color: var(--gv-ink); opacity: .78; display: flex; align-items: center; gap: 10px; }
+  .stratum .lvl::before { content: ""; width: 7px; height: 7px; border-radius: 50%; flex: none;
+    background: var(--gv-accent); box-shadow: 0 0 12px var(--gv-accent-soft); }
+  .stratum h3 { margin: 0 0 3px; }
+  .stratum .lvl + div p { color: var(--gv-ink-muted); font-size: 15px; margin: 0; max-width: 60ch; }
+  @media (max-width: 640px) { .stratum { grid-template-columns: 1fr; gap: 6px; } }
+
+  /* manifest: a slowly auto-scrolling ticker of sources, half the list in view */
+  /* Give this section's split more room for the ticker, so the commercial tags aren't clipped. */
+  .manifest-split { grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 40px; }
+  .mf-row { display: grid; grid-template-columns: minmax(0,2.1fr) minmax(0,1.5fr) minmax(0,2.1fr) minmax(0,2fr);
+    gap: 16px; padding: 11px 2px; align-items: center; border-top: 1px solid var(--gv-hairline-soft); font-size: 14.5px; }
+  .mf-head { border-top: 0; padding-bottom: 10px; font: 400 10.5px var(--gv-font-mono);
+    letter-spacing: .12em; text-transform: uppercase; color: var(--gv-ink-muted); }
+  .mf-src { color: var(--gv-ink); }
+  .mf-host { font-family: var(--gv-font-mono); font-size: 12px; color: var(--gv-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mf-row > span:last-child { display: flex; flex-wrap: wrap; gap: 4px; }
+  .manifest-scroll { position: relative; height: 550px; overflow: hidden;
+    -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 85%, transparent 100%);
+            mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 85%, transparent 100%); }
+  .mf-track { animation: mf-scroll var(--mf-dur, 44s) linear infinite; will-change: transform; }
+  .manifest-scroll:hover .mf-track { animation-play-state: paused; }
+  @keyframes mf-scroll { from { transform: translateY(0); } to { transform: translateY(-50%); } }
+  @media (prefers-reduced-motion: reduce) { .mf-track, .parts-track { animation: none; } }
+
+  /* open parts: the building blocks, each with its permissive license */
+  .parts-scroll { position: relative; margin-top: 18px; height: 372px; overflow: hidden;
+    -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 7%, #000 88%, transparent 100%);
+            mask-image: linear-gradient(180deg, transparent 0, #000 7%, #000 88%, transparent 100%); }
+  .parts-track { animation: mf-scroll var(--mf-dur, 36s) linear infinite; will-change: transform; }
+  .parts-scroll:hover .parts-track { animation-play-state: paused; }
+  .parts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  .parts li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 16px; align-items: center;
+    padding: 12px 2px; border-top: 1px solid var(--gv-hairline-soft); }
+  .parts li:first-child { border-top: 0; }
+  .pt-name { color: var(--gv-ink); font-size: 15px; }
+  .pt-role { grid-column: 1; font: 400 10px var(--gv-font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--gv-ink-muted); margin-top: 2px; }
+  .pt-lic { grid-column: 2; grid-row: 1 / span 2; justify-self: end; align-self: center; font: 400 10px var(--gv-font-mono);
+    letter-spacing: .08em; color: var(--gv-ok); border: 1px solid var(--gv-accent-soft); border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
+  .pt-lic.own { color: var(--gv-ink-muted); border-color: var(--gv-hairline); }
+  .parts-foot { margin: 16px 0 0; color: var(--gv-ink-muted); font-size: 13.5px; }
+  .parts-foot b { color: var(--gv-ink); font-weight: 500; }
+
+  .table-scroll { overflow-x: auto; }
+  footer { border-top: 1px solid var(--gv-hairline-soft); padding-block: 40px 56px; color: var(--gv-ink-muted); font-size: 13.5px; }
+  footer p + p { margin-top: 10px; }
+
+  /* developers */
+  .dev { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 0; min-height: calc(100dvh - var(--gv-nav-h)); }
+  .dev-nav { border-right: 1px solid var(--gv-hairline-soft); padding: 28px 20px 40px var(--gv-gutter);
+    position: sticky; top: var(--gv-nav-h); align-self: start; max-height: calc(100dvh - var(--gv-nav-h)); overflow-y: auto; }
+  /* Sidebar groups collapse/expand; headings are clickable <summary> with a chevron. */
+  .dev-group { margin-bottom: 2px; }
+  .dev-group-head { position: relative; display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none;
+    margin: 20px 0 6px; padding-right: 18px; font: 400 10.5px var(--gv-font-mono); letter-spacing: .22em; text-transform: uppercase; color: var(--gv-ink-muted); }
+  .dev-group-head::-webkit-details-marker { display: none; }
+  .dev-group-head:hover { color: var(--gv-ink); }
+  /* +/- toggle: the vertical stroke rotates down into the horizontal one as the group opens. */
+  .dev-group-head::before, .dev-group-head::after { content: ""; position: absolute; right: 2px; top: 50%;
+    width: 11px; height: 1.6px; background: currentColor; border-radius: 1px; opacity: .85; transition: transform .22s ease; }
+  .dev-group-head::before { transform: translateY(-50%); }
+  .dev-group-head::after { transform: translateY(-50%) rotate(90deg); }
+  .dev-group[open] .dev-group-head::after { transform: translateY(-50%) rotate(0deg); }
+  #dev-list button { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 8px; text-align: left;
+    background: none; border: 0; color: var(--gv-ink-muted); font: 300 15px var(--gv-font-sans); padding: 7px 10px;
+    border-radius: 8px; cursor: pointer; }
+  #dev-list button:hover { color: var(--gv-ink); background: var(--gv-panel); }
+  #dev-list button[aria-current="true"] { color: var(--gv-ink); background: var(--gv-panel-hi); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--gv-ok); }
+  .dot.planned { background: transparent; border: 1px dashed var(--gv-planned); }
+  .dev-main { padding: 40px var(--gv-gutter) 80px 48px; max-width: 900px; }
+  .dev-main .gv-code { margin-top: 8px; }
+  .facts { display: grid; grid-template-columns: 150px 1fr; gap: 10px 20px; margin: 8px 0; font-size: 15.5px; }
+  .facts dt { font: 400 10.5px var(--gv-font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--gv-ink-muted); padding-top: 5px; }
+  .facts dd { margin: 0; }
+
+  /* playground */
+  #pg-frame { display: block; width: 100%; height: calc(100dvh - var(--gv-nav-h)); border: 0; background: var(--gv-bg); }
+
+  /* contact dialog */
+  .gv-dialog { width: min(520px, calc(100vw - 32px)); border: 1px solid var(--gv-hairline); border-radius: var(--gv-radius-card);
+    background: var(--gv-panel); color: var(--gv-ink); padding: 0; }
+  .gv-dialog::backdrop { background: rgba(4, 6, 9, .64); backdrop-filter: blur(3px); }
+  .gv-dialog form { padding: 24px 24px 22px; display: flex; flex-direction: column; gap: 14px; }
+  .cf-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .cf-x { background: none; border: 0; color: var(--gv-ink-muted); font-size: 22px; line-height: 1; cursor: pointer; padding: 0 2px; }
+  .cf-x:hover { color: var(--gv-ink); }
+  .cf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .cf-grid label { display: flex; flex-direction: column; gap: 5px; font: 400 10.5px var(--gv-font-mono);
+    letter-spacing: .1em; text-transform: uppercase; color: var(--gv-ink-muted); }
+  .cf-grid .cf-full { grid-column: 1 / -1; }
+  .cf-grid input, .cf-grid select, .cf-grid textarea { font: 400 14.5px var(--gv-font-sans); color: var(--gv-ink);
+    background: var(--gv-bg); border: 1px solid var(--gv-hairline); border-radius: var(--gv-radius-ctl);
+    padding: 9px 11px; text-transform: none; letter-spacing: normal; }
+  .cf-grid input:focus, .cf-grid select:focus, .cf-grid textarea:focus { outline: 2px solid var(--gv-accent); outline-offset: 1px; border-color: var(--gv-accent); }
+  .cf-grid textarea { resize: vertical; min-height: 84px; }
+  .cf-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 2px; }
+  .cf-status { margin: 0; font-size: 13.5px; min-height: 1.2em; }
+  .cf-status.err { color: var(--gv-no); }
+  .cf-status.ok { color: var(--gv-ok); }
+  /* inline field validation */
+  .cf-err { font: 400 11.5px var(--gv-font-sans); color: var(--gv-no); text-transform: none; letter-spacing: normal; margin-top: 1px; }
+  .cf-grid label.invalid input, .cf-grid label.invalid textarea { border-color: var(--gv-no); }
+  .cf-grid label.invalid input:focus, .cf-grid label.invalid textarea:focus { outline-color: var(--gv-no); border-color: var(--gv-no); }
+  .gv-dialog[data-sent] .cf-grid, .gv-dialog[data-sent] .cf-actions { display: none; }
+  @media (max-width: 520px) { .cf-grid { grid-template-columns: 1fr; } }
+
+  @media (max-width: 900px) {
+    .hero .gv-wrap, .split { grid-template-columns: 1fr; }
+    .globe-frame { justify-self: center; max-width: 420px; }
+    .grid3, .steps { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .stat + .stat { border-left: 0; } .stat { border-top: 1px solid var(--gv-hairline-soft); }
+    .dev { grid-template-columns: 1fr; }
+    .dev-nav { position: static; max-height: none; border-right: 0; border-bottom: 1px solid var(--gv-hairline-soft); padding-right: var(--gv-gutter); }
+    .dev-main { padding: 28px var(--gv-gutter) 64px; }
+    .nav-cta { display: none; }
+  }
+  @media (max-width: 680px) {
+    /* Manifest ticker: the 4-column rows stack into a compact card per source. */
+    .mf-head { display: none; }
+    .mf-row { grid-template-columns: 1fr auto; gap: 2px 12px; padding: 12px 2px; }
+    .mf-src { grid-column: 1; grid-row: 1; font-weight: 500; }
+    .mf-row > span:nth-child(3) { grid-column: 1; grid-row: 2; color: var(--gv-ink-muted); font-size: 13px; }
+    .mf-host { grid-column: 1; grid-row: 3; }
+    .mf-row > span:last-child { grid-column: 2; grid-row: 1 / span 3; align-self: center; }
+    .manifest-scroll { height: 460px; }
+    /* Parts list: keep the license badge from crowding the name on very narrow screens. */
+    .pt-lic { font-size: 9.5px; padding: 3px 8px; }
+  }
+  @media (max-width: 560px) {
+    :root { --gv-nav-h: 104px; }
+    .gv-nav .gv-wrap { flex-direction: column; align-items: stretch; justify-content: center; gap: 2px; }
+    .gv-tabs { justify-content: space-between; }
+    .gv-tab { padding: 8px 6px; }
+    .gv-tab[aria-selected="true"]::after { left: 6px; right: 6px; }
+    .facts { grid-template-columns: 1fr; gap: 2px 0; } .facts dd { margin-bottom: 10px; }
+    .stats { grid-template-columns: 1fr; }
+    .stat + .stat { border-left: 0; }
+    .hero .gv-wrap { padding-block: 44px 36px; gap: 28px; }
+    .stat b { font-size: 30px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="gv-nav">
+  <div class="gv-wrap">
+  <a class="gv-logo" href="#product"><svg class="gv-logo-mark" viewBox="0 0 325 424" fill="currentColor" aria-hidden="true" focusable="false"><path d="M0 0H113A212 212 0 0 1 236.973 383.973L174.332 321.332A130 130 0 0 0 104 82H0ZM0 164H110A48 48 0 0 1 110 260H0ZM0 342H79L161 424H0Z"/></svg>Rendered Data</a>
+    <div class="gv-tabs" role="tablist" aria-label="Sections">
+      <button class="gv-tab" role="tab" id="tab-product" data-go="product" aria-controls="view-product">Product</button>
+      <button class="gv-tab" role="tab" id="tab-developers" data-go="developers" aria-controls="view-developers">Developers</button>
+      <button class="gv-tab" role="tab" id="tab-playground" data-go="playground" aria-controls="view-playground">Playground</button>
+    </div>
+    <a class="gv-btn gv-btn--sm nav-cta" href="#playground">Open the playground</a>
+  </div>
+</header>
+
+<!-- ============================== PRODUCT ============================== -->
+<main id="view-product" data-view="product" role="tabpanel" aria-labelledby="tab-product">
+
+  <section class="hero">
+    <div class="gv-wrap">
+      <div class="stack">
+        <p class="gv-eyebrow">Rendered Data Maps</p>
+        <h1 class="gv-h1">Build weather and planetary maps <span class="gv-accent-ink">for any world.</span></h1>
+        <p class="gv-lede">An open, self-hostable globe for Earth, the Moon, and Mars, and every world after them. Each one comes alive as you pour data in: live science feeds, your own layers, a real sky overhead.</p>
+        <div class="row">
+          <a class="gv-btn gv-btn--solid" href="#playground">Open the playground</a>
+          <a class="gv-btn" href="#developers">Read the docs</a>
+        </div>
+        <p class="gv-micro">No key. No signup. Open-source core on MapLibre GL JS <span id="ml-ver"></span>. Self-host it anywhere.</p>
+      </div>
+      <div class="globe-frame">
+        <div id="hero-globe" aria-label="A live, interactive globe in a real starfield"></div>
+        <p class="gv-micro globe-cap">Live and interactive, wrapped in a real starfield. Drag to spin it.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="gv-wrap" aria-label="At a glance">
+    <div class="stats">
+      <div class="stat"><b>&#8734;</b><span>mapping combinations</span></div>
+      <div class="stat"><b>3+</b><span>worlds, and growing</span></div>
+      <div class="stat"><b>0</b><span>keys, signups, lock-in</span></div>
+      <div class="stat"><b>100%</b><span>self-hostable, your origin</span></div>
+      <div class="stat"><b>Open</b><span>MIT &amp; BSD core</span></div>
+    </div>
+  </section>
+
+  <section class="gv-section gv-wrap" id="features">
+    <div class="gv-head">
+      <p class="gv-label">What you can do</p>
+      <h2 class="gv-h2">From a bare globe to a living world.</h2>
+      <p>Weather, geoscience, and planetary data on an open renderer. Every source you add makes the map more alive, and there is no edge to how far it goes.</p>
+    </div>
+    <div class="grid3">
+      <div class="gv-card">
+        <h3 class="gv-h3">From Earth to exoplanets</h3>
+        <p>Earth, the Moon, and Mars today; new planets, moons, and exoplanets drop in as their data lands. One renderer draws them all, each in its own correct sky.</p>
+      </div>
+      <div class="gv-card">
+        <h3 class="gv-h3">Alive with data</h3>
+        <p>Live earthquake feeds, daily satellite imagery you can scrub by date, shaded 3D terrain, animated wind-and-current flow. The more sources you feed it, the more the map breathes. Built for data that changes by the hour.</p>
+      </div>
+      <div class="gv-card">
+        <h3 class="gv-h3">Your data, your tools</h3>
+        <p>Drop in GeoJSON, KML, or your own tiles, search places, and draw and measure straight on the globe. It all runs in the browser. Nothing is uploaded.</p>
+      </div>
+    </div>
+    <div class="row" style="margin-top:28px"><a class="gv-btn gv-btn--sm gv-btn--solid" href="#playground">Open the playground</a></div>
+  </section>
+
+  <section class="gv-section gv-wrap">
+    <div class="gv-head">
+      <p class="gv-label">As above, so below</p>
+      <h2 class="gv-h2">One stack, from the lakebed to the stars.</h2>
+      <p>Most maps stop at the coastline. Rendered Data Maps renders the whole vertical column: the basin beneath the water, the terrain that frames it, the air that moves across it, and the real sky it all turns under. One renderer, top to bottom.</p>
+    </div>
+    <ol class="strata">
+      <li class="stratum"><span class="lvl">The sky</span><div><h3 class="gv-h3">Real stars, planets, and the Milky Way</h3><p>The actual celestial sphere from a catalogue of thousands of stars, placed for any moment in time and correctly oriented for Earth, the Moon, or Mars.</p></div></li>
+      <li class="stratum"><span class="lvl">The air</span><div><h3 class="gv-h3">Atmosphere and a live day-night line</h3><p>A glowing limb of air around the globe, and a terminator that tracks the real Sun as it sweeps the surface.</p></div></li>
+      <li class="stratum"><span class="lvl">The surface</span><div><h3 class="gv-h3">Imagery, borders, and live feeds</h3><p>Daily satellite imagery you can scrub by date, country lines, earthquakes as they happen, and your own data layered on top.</p></div></li>
+      <li class="stratum"><span class="lvl">The terrain</span><div><h3 class="gv-h3">Shaded relief and true 3D elevation</h3><p>Pitch the camera and the mountains rise. Hillshade and real DEM elevation give every ridge and valley its shape.</p></div></li>
+      <li class="stratum"><span class="lvl">Below the waterline</span><div><h3 class="gv-h3">Bathymetry and lakebeds</h3><p>The map does not stop at the shore. Relief and bathymetry carry the basin down to the bottom of the lake and the floor of the sea.</p></div></li>
+    </ol>
+  </section>
+
+  <section class="gv-section gv-band">
+    <div class="gv-wrap split manifest-split">
+      <div class="gv-head">
+        <p class="gv-label">License-clear by design</p>
+        <h2 class="gv-h2">Ship commercially without guessing.</h2>
+        <p>Every source the map can touch arrives with its license, attribution, and commercial terms attached, and is probed live before it ever draws. If something is down, you see why; nothing fake is drawn in its place.</p>
+        <div class="row"><a class="gv-link" href="#playground">See it in the playground</a></div>
+      </div>
+      <div id="manifest-table" class="manifest" aria-label="Source manifest"></div>
+    </div>
+  </section>
+
+  <section class="gv-section gv-wrap split">
+    <div class="gv-head">
+      <p class="gv-label">For developers</p>
+      <h2 class="gv-h2">One import. Any world.</h2>
+      <p>New up one object and you have a globe. Switch between Earth, the Moon and Mars with a single call. Every layer stays gated on its own live probe, so you ship data you can trust and attribution you can prove.</p>
+      <p>No key, no build step, no proprietary renderer. It runs from this folder today.</p>
+      <div class="row">
+        <a class="gv-btn gv-btn--sm gv-btn--solid" href="sdk-demo.html" target="_blank" rel="noopener">See the SDK demo</a>
+        <a class="gv-btn gv-btn--sm" href="#developers/sdk">Read the SDK reference</a>
+      </div>
+    </div>
+    <div>
+      <p class="gv-eyebrow">Copy, paste, ship. No build step</p>
+      <pre class="gv-code" style="margin-top:12px" id="sdk-snippet"></pre>
+    </div>
+  </section>
+
+  <section class="gv-section gv-band">
+    <div class="gv-wrap split">
+      <div class="gv-head">
+        <p class="gv-label">No lock-in</p>
+        <h2 class="gv-h2">Open parts. Your own origin.</h2>
+        <p>No proprietary renderer, no required account, nothing you can't run yourself. Rendered Data Maps is built on open standards and permissive licenses (BSD and MIT, top to bottom), so the whole stack can live on your infrastructure.</p>
+        <p>Start on our hosted tiles, or lift and shift to your own bucket the day you need to.</p>
+      </div>
+      <div>
+        <p class="gv-eyebrow">Every part is open, and the license says so</p>
+        <div class="parts-scroll">
+        <ul class="parts parts-track" id="parts-list">
+          <li><span class="pt-name">MapLibre GL JS</span><span class="pt-role">Renderer</span><span class="pt-lic">BSD-3-Clause</span></li>
+          <li><span class="pt-name">Natural Earth</span><span class="pt-role">Open basemap</span><span class="pt-lic">Public domain</span></li>
+          <li><span class="pt-name">Noto Sans glyphs</span><span class="pt-role">Map labels</span><span class="pt-lic">SIL OFL 1.1</span></li>
+          <li><span class="pt-name">PMTiles</span><span class="pt-role">Tile archives on your bucket</span><span class="pt-lic">BSD-3-Clause</span></li>
+          <li><span class="pt-name">Cloud-Optimized GeoTIFF</span><span class="pt-role">Raster &amp; elevation</span><span class="pt-lic">Open format</span></li>
+          <li><span class="pt-name">Yale Bright Star Catalogue</span><span class="pt-role">The celestial layer</span><span class="pt-lic">Public domain</span></li>
+          <li><span class="pt-name">Model Context Protocol</span><span class="pt-role">Agent access</span><span class="pt-lic">Open spec</span></li>
+          <li><span class="pt-name">gveq protocol</span><span class="pt-role">Moon &amp; Mars reprojection</span><span class="pt-lic own">Our code, yours too</span></li>
+        </ul>
+        </div>
+        <p class="parts-foot">No part is a black box. <b>Fork it, host it, ship it.</b> The whole stack runs on your own origin.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="gv-section gv-band">
+    <div class="gv-wrap">
+      <div class="gv-head">
+        <p class="gv-label">Pricing</p>
+        <h2 class="gv-h2">Start free. Scale when you do.</h2>
+        <p>Build on the open core at no cost. Pay only when you want hosted tiles, higher limits or a supported deployment, never to escape lock-in, because you can always run the whole thing yourself.</p>
+      </div>
+      <div class="grid3">
+        <div class="gv-card price">
+          <p class="gv-eyebrow">Developer</p>
+          <h3 class="gv-h3">Everything open, on your own origin</h3>
+          <b>Free</b>
+          <p>The renderer, the SDK, the manifest and the playground. Self-host it, read every line, ship it in production. No card, no key.</p>
+        </div>
+        <div class="gv-card price">
+          <p class="gv-eyebrow">Team</p>
+          <h3 class="gv-h3">Hosted tiles and keys, usage-based</h3>
+          <b>Usage-based</b>
+          <p>Managed tiles, metered keys with origin allow-lists, and the science pipelines, so you draw layers instead of running infrastructure.</p>
+        </div>
+        <div class="gv-card price">
+          <p class="gv-eyebrow">Enterprise</p>
+          <h3 class="gv-h3">Your storage, your rules, our support</h3>
+          <b>Let's talk</b>
+          <p>Private deployment, license-clean paid builds with share-alike data stripped by rule, and a direct line to the team that builds it.</p>
+          <button type="button" class="gv-btn gv-btn--sm gv-btn--solid" data-contact data-cta="Enterprise" style="align-self:flex-start;margin-top:4px">Contact sales</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="gv-section gv-wrap">
+    <div class="gv-head">
+      <p class="gv-label">Get started</p>
+      <h2 class="gv-h2">See it move. Then make it yours.</h2>
+    </div>
+    <ol class="steps">
+      <li class="gv-card"><h3 class="gv-h3">Spin the globe</h3><p>Open the playground: switch worlds, toggle live layers, scrub imagery by date. No account, no key.</p><a class="gv-link" href="#playground" style="align-self:flex-start">Playground</a></li>
+      <li class="gv-card"><h3 class="gv-h3">Run the SDK</h3><p>One import gets you a working globe. Copy the snippet and drop it into your own app.</p><a class="gv-link" href="sdk-demo.html" target="_blank" rel="noopener" style="align-self:flex-start">Live demo</a></li>
+      <li class="gv-card"><h3 class="gv-h3">Make it yours</h3><p>Serve it with <code>node serve.mjs</code> and ship it on your own origin: tiles, keys and all.</p><a class="gv-link" href="#developers" style="align-self:flex-start">Developers</a></li>
+    </ol>
+  </section>
+
+  <section class="gv-section gv-band">
+    <div class="gv-wrap" style="text-align:center; max-width:720px">
+      <h2 class="gv-h2">A globe for every world you work on, and every world yet to come.</h2>
+      <p style="margin:12px auto 0">Weather, geoscience, and planetary data: open, self-hostable, and license-clear. Start with three worlds and your own data, and never run out of room to grow.</p>
+      <div class="row" style="justify-content:center; margin-top:28px">
+        <a class="gv-btn gv-btn--solid" href="#playground">Open the playground</a>
+        <button type="button" class="gv-btn" data-contact data-cta="General">Talk to sales</button>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="gv-wrap">
+      <p>© 2026 Rendered Data. All rights reserved.</p>
+    </div>
+  </footer>
+</main>
+
+<!-- ============================== DEVELOPERS ============================== -->
+<main id="view-developers" data-view="developers" role="tabpanel" aria-labelledby="tab-developers" hidden>
+  <div class="dev">
+    <nav class="dev-nav" aria-label="Features">
+      <p class="gv-eyebrow" style="margin-bottom:14px;font-size:16px;letter-spacing:.2em;color:var(--gv-ink)">SDK Features</p>
+      <div id="dev-list"></div>
+    </nav>
+    <article class="dev-main stack" id="dev-detail" aria-live="polite"></article>
+  </div>
+</main>
+
+<!-- ============================== PLAYGROUND ============================== -->
+<main id="view-playground" data-view="playground" role="tabpanel" aria-labelledby="tab-playground" hidden>
+  <iframe id="pg-frame" title="Rendered Data Maps playground" allow="clipboard-write"></iframe>
+</main>
+
+<dialog id="contact-dialog" class="gv-dialog" aria-labelledby="cf-title">
+  <form id="contact-form" novalidate>
+    <div class="cf-head">
+      <h2 class="gv-h3" id="cf-title">Talk to us about Enterprise</h2>
+      <button type="button" class="cf-x" data-close aria-label="Close">×</button>
+    </div>
+    <p class="gv-micro" data-intro>Private deployment, license-clean paid builds, and a direct line to the team. Tell us what you need and we'll reply by email.</p>
+    <div class="cf-grid">
+      <label>Name<input name="name" required autocomplete="name" maxlength="200"><small class="cf-err" hidden></small></label>
+      <label>Work email<input name="email" type="email" required autocomplete="email" maxlength="200"><small class="cf-err" hidden></small></label>
+      <label>Company<input name="company" autocomplete="organization" maxlength="200"></label>
+      <label>Organization size
+        <select name="team">
+          <option value="">Select</option>
+          <option>1–10</option>
+          <option>11–50</option>
+          <option>51–200</option>
+          <option>200+</option>
+        </select>
+      </label>
+      <label class="cf-full">What are you building?<textarea name="message" rows="4" required maxlength="4000"></textarea><small class="cf-err" hidden></small></label>
+    </div>
+    <!-- Which CTA opened the form (e.g. "Enterprise"); set in site.js from the clicked button's data-cta. -->
+    <input type="hidden" name="enquiry_type" id="cf-cta" value="Website">
+    <!-- Web3Forms honeypot: hidden from people, tempting to bots; a checked value is dropped as spam. -->
+    <input type="checkbox" name="botcheck" tabindex="-1" autocomplete="off" aria-hidden="true" style="display:none">
+    <div class="cf-actions">
+      <button type="button" class="gv-btn gv-btn--sm" data-close>Cancel</button>
+      <button type="submit" class="gv-btn gv-btn--sm gv-btn--solid" id="cf-submit">Send</button>
+    </div>
+    <p class="cf-status" id="cf-status" role="status" aria-live="polite"></p>
+  </form>
+</dialog>
+
+<script type="module" src="src/site.js"></script>
+</body>
+</html>
