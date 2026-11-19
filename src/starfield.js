@@ -8,6 +8,10 @@
 
 import * as Cel from './celestial.js';
 
+// Bundled body textures (earth.jpg / moon.jpg) live at data/textures/* beside the SDK's src/ folder.
+// Resolve them against THIS module's URL, not the page, so they load when the SDK is hosted at a sub-path.
+const DEFAULT_ROOT = new URL('..', import.meta.url).href;
+
 const rad = (d) => (d * Math.PI) / 180;
 const V = {
     sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
@@ -27,7 +31,52 @@ function rotAxis(v, k, a) {
     const kv = V.cross(k, v), kd = V.dot(k, v);
     return V.add(V.add(V.scale(v, c), V.scale(kv, s)), V.scale(k, kd * (1 - c)));
 }
+// t∈[0,1] → points on the unit great circle whose plane has the given normal (two orthonormal in-plane axes).
+function greatCircleFn(normal) {
+    const n = V.unit(normal);
+    let u = Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+    u = V.unit(V.cross(u, n)); const w = V.cross(n, u);
+    return (t) => { const a = 2 * Math.PI * t, c = Math.cos(a), s = Math.sin(a);
+        return [u[0] * c + w[0] * s, u[1] * c + w[1] * s, u[2] * c + w[2] * s]; };
+}
 const hexToRgb = (hex) => { const h = hex.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)].join(','); };
+// Draw a resolved body (the Moon from Earth, Earth from the Moon) at (X,Y) radius r, with its lit phase —
+// k = illuminated fraction (0 new … 1 full); the lit limb faces litAngle (toward the Sun). A faint glow +
+// an earthshine-dim full disc read underneath, then the bright lune on top (two-arc terminator ellipse).
+function drawPhasedDisc(ctx, X, Y, r, k, litAngle, rgb, tex) {
+    k = Math.max(0, Math.min(1, k));
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(X, Y, r * 0.6, X, Y, r * 2.3);
+    g.addColorStop(0, `rgba(${rgb},0.22)`); g.addColorStop(1, `rgba(${rgb},0)`);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(X, Y, r * 2.3, 0, 2 * Math.PI); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+    const b = r * (1 - 2 * k);                               // terminator semi-minor axis (signed by phase)
+    if (tex) {
+        ctx.save();                                          // real surface map clipped to the disc
+        ctx.beginPath(); ctx.arc(X, Y, r, 0, 2 * Math.PI); ctx.clip();
+        ctx.drawImage(tex, X - r, Y - r, 2 * r, 2 * r);
+        ctx.restore();
+        ctx.save();                                          // darken the night side (the unlit lune)
+        ctx.translate(X, Y); ctx.rotate(litAngle);
+        ctx.fillStyle = 'rgba(2,5,12,0.82)';
+        ctx.beginPath();
+        ctx.arc(0, 0, r, Math.PI / 2, -Math.PI / 2, false);  // the −X (night) limb
+        ctx.ellipse(0, 0, Math.abs(b), r, 0, -Math.PI / 2, Math.PI / 2, b < 0);
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+        return;
+    }
+    ctx.save();
+    ctx.translate(X, Y); ctx.rotate(litAngle);
+    ctx.fillStyle = `rgba(${rgb},0.15)`;                      // earthshine: the whole disc faintly visible
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = `rgb(${rgb})`;                           // lit lune, bulging toward +X (the Sun)
+    ctx.beginPath();
+    ctx.arc(0, 0, r, -Math.PI / 2, Math.PI / 2, false);      // the +X (lit) limb
+    ctx.ellipse(0, 0, Math.abs(b), r, 0, Math.PI / 2, -Math.PI / 2, b > 0);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+}
 
 // One shared stylesheet for the clickable travel hotspots (pulse ring + hover label).
 function ensureHotspotStyle() {
@@ -48,7 +97,55 @@ function ensureHotspotStyle() {
 
 // Body orientation (IAU pole + prime meridian) now lives in src/celestial.js, shared by the globe
 // sky here and the mesh sky in src/shapemodel.js — one source of truth, extended to Ganymede/Phobos.
-const iauElements = Cel.iauElements, celestialToBody = Cel.celestialToBody;
+const iauElements = Cel.iauElements, celestialToBody = Cel.celestialToBody, gmst = Cel.gmst, moonOfDate = Cel.moonOfDate;
+
+// ---- resolved-body textures (Earth/Moon drawn as little textured spheres, not flat discs) ------------
+// Bundled equirectangular maps (Solar System Scope, CC BY 4.0) — stored locally, never fetched at runtime.
+const BODY_TEX = {earth: 'data/textures/earth.jpg', moon: 'data/textures/moon.jpg'};
+const _texPix = {};        // key -> {data,w,h} once decoded (null = failed/loading)
+function bodyTexPixels(key, base) {
+    if (key in _texPix) return _texPix[key];
+    _texPix[key] = null;
+    if (!BODY_TEX[key]) return null;
+    const img = new Image();
+    img.onload = () => {
+        try {
+            const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+            const cx = c.getContext('2d'); cx.drawImage(img, 0, 0);
+            _texPix[key] = {data: cx.getImageData(0, 0, img.width, img.height).data, w: img.width, h: img.height};
+        } catch { _texPix[key] = null; }
+    };
+    img.onerror = () => { delete _texPix[key]; };   // allow a retry
+    img.src = (base || '') + BODY_TEX[key];
+    return null;
+}
+// Orthographic render of a body's equirect texture onto a disc: the hemisphere facing the viewer, north up,
+// with longitude lon0 (deg) at the centre. Cached by (key, size-bucket, lon0-bucket) so it rebuilds rarely.
+const _ortho = {};
+function orthoSphere(key, size, lon0, base) {
+    const tex = bodyTexPixels(key, base); if (!tex) return null;
+    size = Math.max(16, Math.min(240, Math.round(size / 8) * 8));
+    const lon0b = Math.round(lon0 / 3) * 3, ck = `${key}_${size}_${lon0b}`;
+    if (_ortho[ck]) return _ortho[ck];
+    const out = document.createElement('canvas'); out.width = size; out.height = size;
+    const octx = out.getContext('2d'), od = octx.createImageData(size, size), O = od.data;
+    const {data, w, h} = tex, R = size / 2, lon0r = lon0b * Math.PI / 180;
+    for (let py = 0; py < size; py++) {
+        const y = (R - py) / R;
+        for (let px = 0; px < size; px++) {
+            const x = (px - R) / R, rr = x * x + y * y, i = (py * size + px) * 4;
+            if (rr > 1) { O[i + 3] = 0; continue; }
+            const z = Math.sqrt(1 - rr), lat = Math.asin(y), lon = lon0r + Math.atan2(x, z);
+            let u = lon / (2 * Math.PI) + 0.5; u -= Math.floor(u);
+            const v = 0.5 - lat / Math.PI;
+            const si = (Math.min(h - 1, (v * h) | 0) * w + Math.min(w - 1, (u * w) | 0)) * 4;
+            O[i] = data[si]; O[i + 1] = data[si + 1]; O[i + 2] = data[si + 2]; O[i + 3] = 255;
+        }
+    }
+    octx.putImageData(od, 0, 0);
+    const keys = Object.keys(_ortho); if (keys.length > 20) delete _ortho[keys[0]];
+    return (_ortho[ck] = out);
+}
 function offsetLL(lng, lat, ang, az) {
     const p1 = rad(lat), l1 = rad(lng);
     const p2 = Math.asin(Math.sin(p1) * Math.cos(ang) + Math.cos(p1) * Math.sin(ang) * Math.cos(az));
@@ -67,6 +164,8 @@ function offsetLL(lng, lat, ang, az) {
  */
 export function createStarfield(map, opts = {}) {
     const getBody = opts.getBody || (() => opts.body || 'earth');
+    const base = opts.root || DEFAULT_ROOT;   // asset base for the bundled body textures; module-relative by
+                                              // default so the SDK finds data/textures/* at any hosted sub-path
     const canvas = document.createElement('canvas');
     canvas.className = 'gv-starfield';
     canvas.style.cssText = 'position:absolute;inset:0;pointer-events:none;';
@@ -200,15 +299,20 @@ export function createStarfield(map, opts = {}) {
         };
         const vis = (p) => p && !p.occluded && p.X > -20 && p.Y > -20 && p.X < w + 20 && p.Y < h + 20;
         const projRD = (ra, dec) => project(Cel.eqToVec(ra, dec));
+        // Draws a projected great circle, skipping segments hidden behind the body. Returns the topmost
+        // on-screen point it drew (clear of the edges) so a caller can anchor a label without re-projecting.
         const polyarc = (fn, n, style, width, alpha) => {
             ctx.strokeStyle = style; ctx.lineWidth = width; ctx.globalAlpha = alpha;
-            ctx.beginPath(); let drawing = false;
+            ctx.beginPath(); let drawing = false, top = null;
             for (let i = 0; i <= n; i++) {
                 const p = project(fn(i / n)); const ok = vis(p);
-                if (ok) { if (drawing) ctx.lineTo(p.X, p.Y); else { ctx.moveTo(p.X, p.Y); drawing = true; } }
-                else drawing = false;
+                if (ok) {
+                    if (drawing) ctx.lineTo(p.X, p.Y); else { ctx.moveTo(p.X, p.Y); drawing = true; }
+                    if (p.X > 70 && p.X < w - 70 && p.Y > 16 && (!top || p.Y < top.Y)) top = {X: p.X, Y: p.Y};
+                } else drawing = false;
             }
             ctx.stroke(); ctx.globalAlpha = 1;
+            return top;
         };
 
         if (flags.milkyWay) {
@@ -225,6 +329,17 @@ export function createStarfield(map, opts = {}) {
             for (const dec of [-60, -30, 0, 30, 60]) polyarc((t) => Cel.eqToVec(360 * t, dec), 96, dec === 0 ? '#5a6a8a' : '#3a4a6a', dec === 0 ? 0.9 : 0.6, 0.55);
         }
         if (flags.ecliptic) polyarc((t) => Cel.eclToEq(360 * t, 0, 23.439), 180, '#caa94a', 1, 0.7);
+        // Orbital-plane ring. On Earth there is no parent body on screen and Earth's own orbit collapses
+        // onto the ecliptic, so the ring worth drawing is the MOON's orbit around Earth — the Moon rides
+        // along it, which is what makes it legible. On every other body we draw that body's own plane.
+        let orbitLabelInfo = null;
+        if (flags.orbit) {
+            const onEarth = getBody() === 'earth';
+            const orbitCol = onEarth ? '#cdd6e0' : '#43d6b0';
+            const orbitFn = greatCircleFn(Cel.orbitNormal(onEarth ? 'moon' : getBody(), time));
+            const top = polyarc(orbitFn, 180, orbitCol, 1.1, 0.78);   // reuses polyarc's own projection for the label anchor
+            if (top) orbitLabelInfo = {X: top.X, Y: top.Y, text: onEarth ? 'Moon’s orbit' : 'orbital plane', col: orbitCol};
+        }
 
         if (flags.constellations) {
             ctx.strokeStyle = '#5c86c4'; ctx.lineWidth = 1; ctx.globalAlpha = 0.55;
@@ -275,18 +390,45 @@ export function createStarfield(map, opts = {}) {
             ctx.fillStyle = `rgb(${rgb})`; ctx.beginPath(); ctx.arc(p.X, p.Y, r, 0, 2 * Math.PI); ctx.fill();
             ctx.globalCompositeOperation = 'source-over';
         };
-        // Sun, Moon and planets as seen FROM the current body (so Mars shows Earth, not Mars).
+        // Sun, Moon and planets as seen FROM the current body (so the Moon shows Earth, not the Moon).
         const hotspots = [];
         const here = getBody();
-        for (const b of Cel.skyBodies(here, time)) {
-            if ((b.kind === 'sun' && !flags.sun) || (b.kind === 'moon' && !flags.moon) || (b.kind === 'planet' && !flags.planets)) continue;
+        const bodyList = Cel.skyBodies(here, time);
+        const sunB = bodyList.find((bd) => bd.kind === 'sun');
+        const sunS = sunB && celestialToBody(Cel.eqToVec(sunB.ra, sunB.dec), el);   // Sun direction in body frame
+        const R_SUN_AU = 696000 / 1.495978707e8;
+        for (const b of bodyList) {
+            const disc = b.kind === 'moon' || b.kind === 'earth';   // resolved bodies: the Earth–Moon pair
+            if ((b.kind === 'sun' && !flags.sun) || (b.kind === 'moon' && !flags.moon)
+                || ((b.kind === 'planet' || b.kind === 'earth') && !flags.planets)) continue;
             const p = projRD(b.ra, b.dec); if (!vis(p)) continue;
             const rgb = hexToRgb(b.color);
-            const r = b.kind === 'sun' ? 7 : b.kind === 'moon' ? 5.5 : Math.max(1.8, 4 - 0.5 * b.mag);
-            const glow = b.kind === 'sun' ? 4 : b.kind === 'moon' ? 2.2 : 2.4;
-            sprite(p, r, rgb, glow);
-            const label = b.kind === 'moon' && b.illum != null ? `${b.name} ${(b.illum * 100) | 0}%` : b.name;
-            labels.push([p.X + r + 4, p.Y, label, b.color]);
+            let r;
+            if (disc) {
+                // True angular size (angRad) projected through the view's focal length f — so the Moon
+                // reads ~0.5° from Earth and Earth ~1.9° from the Moon (a real disc, not a planet dot).
+                r = Math.max(3.5, f * (b.angRad || 0.0045));
+                // The lit limb faces the Sun — computed in 3D (the Sun's direction tangent to the body,
+                // projected onto the screen's right/up axes) so it's correct even when the Sun is off-screen.
+                let litAngle = 0;
+                if (sunS) {
+                    const bS = celestialToBody(Cel.eqToVec(b.ra, b.dec), el), dp = V.dot(sunS, bS);
+                    const tan = [sunS[0] - bS[0] * dp, sunS[1] - bS[1] * dp, sunS[2] - bS[2] * dp];
+                    litAngle = Math.atan2(-V.dot(tan, up), V.dot(tan, right));
+                }
+                // Real surface map: the Moon shows its Earth-facing (near) side; Earth shows the longitude
+                // currently under the Moon (moonRA − GMST), so it turns through the day. Falls back to the
+                // flat shaded disc until the texture decodes.
+                const lon0 = b.kind === 'earth' ? moonOfDate(time).ra - gmst(time) : 0;
+                const tex = r > 5 ? orthoSphere(b.kind, 2 * r, lon0, base) : null;
+                drawPhasedDisc(ctx, p.X, p.Y, r, b.illum ?? 1, litAngle, rgb, tex);
+                labels.push([p.X + r + 5, p.Y, `${b.name} ${((b.illum ?? 1) * 100) | 0}%`, b.color]);
+            } else {
+                // The Sun true-to-scale (atan(R_sun/distance)); planets are point sources sized by brightness.
+                r = b.kind === 'sun' ? Math.max(2, f * Math.atan(R_SUN_AU / (b.dist || 1))) : Math.max(1.6, 3.4 - 0.85 * b.mag);
+                sprite(p, r, rgb, b.kind === 'sun' ? 4 : 2.4);
+                labels.push([p.X + r + 4, p.Y, b.name, b.color]);
+            }
             const id = b.name.toLowerCase();
             if (interactive && navigable.has(id) && id !== here) hotspots.push({id, name: b.name, X: p.X, Y: p.Y});
         }
@@ -303,6 +445,12 @@ export function createStarfield(map, opts = {}) {
             for (const con of Cel.CONSTELLATIONS) { if (!con.label) continue; const p = projRD(con.label[0], con.label[1]); if (vis(p)) ctx.fillText(con.name.toUpperCase(), p.X, p.Y); }
             ctx.globalAlpha = 1; ctx.textAlign = 'left';
         }
+        if (orbitLabelInfo) {   // drawn last so stars/constellations never sit on top of the ring's name
+            ctx.font = '11px ' + mono; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+            ctx.fillStyle = orbitLabelInfo.col; ctx.globalAlpha = 0.9;
+            ctx.fillText(orbitLabelInfo.text, orbitLabelInfo.X, orbitLabelInfo.Y - 7);
+            ctx.textAlign = 'left'; ctx.globalAlpha = 1;
+        }
     };
 
     fit(); render();
@@ -315,6 +463,7 @@ export function createStarfield(map, opts = {}) {
         set: (k, v) => { flags[k] = v; render(); },
         time: () => time,
         count: () => prepared.length,
+        canvas: () => canvas,   // the overlay canvas, so a snapshot can composite the sky over the globe
         stop: () => { map.off('move', render); map.off('resize', onResize); canvas.remove(); markerLayer?.remove(); markers.clear(); }
     };
 }

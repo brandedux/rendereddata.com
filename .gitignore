@@ -157,3 +157,6 @@ keys.json
 # macOS
 .DS_Store
 old-package-lock.json
+
+# SDK bundle build output (regenerate with: node build-sdk.mjs)
+/dist/

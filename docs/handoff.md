@@ -158,8 +158,8 @@ await map.addLayer('osm', { on: false });
 const layer = await map.addUserLayer(fileOrUrl); // GeoJSON/KML/GPX file or URL, or {z}/{x}/{y} template
 map.removeUserLayer(layer.id);
 
-// place search (bundled Natural Earth names; self-hosted)
-map.flyToPlace(map.search('Lake Tahoe')[0]);
+// place search (bundled Natural Earth country names; self-hosted, Earth only)
+map.flyToPlace(map.search('Argentina')[0]);
 
 // draw and measure (geodesic length / spherical area)
 const draw = map.draw({ mode: 'polygon' });

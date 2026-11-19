@@ -1,0 +1,19 @@
+{
+  "_about": "Authoritative rotational elements per body, used to drive the 'Rotate on axis' demo and to spin each parent planet behind its moon. Rates match the IAU Working Group on Cartographic Coordinates & Rotational Elements (2015) prime-meridian W rates encoded in src/celestial.js iauElements(); periods are the sidereal rotation periods from the NASA planetary fact sheets. A moon and its primary rotate in the SAME sense (all bodies here are prograde) about nearly the SAME axis (a tidally-locked moon orbits in its primary's equatorial plane, so their poles are within a fraction of a degree) but at DIFFERENT rates — e.g. Mars turns once per 24.6 h while Phobos turns once per 7.65 h.",
+  "fields": {
+    "sidereal_period_hours": "time for one 360 deg rotation in inertial space",
+    "deg_per_day": "360 * 24 / sidereal_period_hours; equals the IAU W rate (deg/day)",
+    "sense": "prograde or retrograde spin direction",
+    "pole_j2000_ra_dec_deg": "IAU J2000 north-pole direction [right ascension, declination] in degrees",
+    "obliquity_deg": "axial tilt of the equator to the body's orbit",
+    "primary": "the body it orbits (null for planets), whose sky it appears in"
+  },
+  "bodies": {
+    "earth":    { "sidereal_period_hours": 23.9344696, "deg_per_day": 360.9856, "sense": "prograde", "pole_j2000_ra_dec_deg": [0.00,    90.00], "obliquity_deg": 23.44, "primary": null },
+    "moon":     { "sidereal_period_hours": 655.719864, "deg_per_day": 13.1764,  "sense": "prograde", "pole_j2000_ra_dec_deg": [266.86,  65.64], "obliquity_deg": 6.68,  "primary": "earth" },
+    "mars":     { "sidereal_period_hours": 24.6229,    "deg_per_day": 350.8920, "sense": "prograde", "pole_j2000_ra_dec_deg": [317.68,  52.89], "obliquity_deg": 25.19, "primary": null },
+    "phobos":   { "sidereal_period_hours": 7.653384,   "deg_per_day": 1128.8446, "sense": "prograde", "pole_j2000_ra_dec_deg": [317.68, 52.90], "obliquity_deg": 0.0,  "primary": "mars" },
+    "jupiter":  { "sidereal_period_hours": 9.924960,   "deg_per_day": 870.5360, "sense": "prograde", "pole_j2000_ra_dec_deg": [268.057, 64.495], "obliquity_deg": 3.13, "primary": null },
+    "ganymede": { "sidereal_period_hours": 171.709,    "deg_per_day": 50.3176,  "sense": "prograde", "pole_j2000_ra_dec_deg": [268.20,  64.51], "obliquity_deg": 0.33, "primary": "jupiter" }
+  }
+}

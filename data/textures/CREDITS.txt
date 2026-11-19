@@ -1,0 +1,14 @@
+Bundled celestial-body textures — attribution
+=============================================
+
+These equirectangular surface maps are stored locally (never fetched at runtime) so the
+scenes render offline and never depend on a third-party API.
+
+earth.jpg    — NASA GIBS Blue Marble (Shaded Relief + Bathymetry), public domain
+moon.jpg     — Solar System Scope (solarsystemscope.com/textures), CC BY 4.0
+jupiter.jpg  — Solar System Scope (solarsystemscope.com/textures), CC BY 4.0
+mars.jpg     — NASA / USGS Viking colour mosaic (via trek.nasa.gov), public domain
+
+Solar System Scope textures are licensed CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/):
+free to use and modify with attribution to Solar System Scope. The maps themselves are based on
+NASA elevation and imagery data.

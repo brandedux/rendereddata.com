@@ -10,7 +10,8 @@
   "scripts": {
     "start": "node serve.mjs",
     "serve": "node serve.mjs",
-    "mcp": "node mcp-server.mjs"
+    "mcp": "node mcp-server.mjs",
+    "build:sdk": "node build-sdk.mjs"
   },
   "dependencies": {},
   "devDependencies": {}

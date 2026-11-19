@@ -6,6 +6,7 @@ import {registerEquirectProtocol} from './eqproj.js';
 import {createStarfield, createTerminator} from './starfield.js';
 import {initBottomSheet} from './sheet.js';
 import {ShapeModel} from './shapemodel.js';
+import {SHAPE_BODIES} from './shapebodies.js';
 
 const ROOT = new URL('..', import.meta.url).href;
 const $ = (id) => document.getElementById(id);
@@ -53,13 +54,6 @@ const BODIES = {
             ['North Pole', {center: [0, 89.5], zoom: 2.2, pitch: 0, bearing: 0}],
             ['Antimeridian', {center: [180, 0], zoom: 2, pitch: 0, bearing: 0}]
         ]},
-    moon: {label: 'Moon', radiusKm: 1737.4, bg: '#1a1a1c', sky: false,
-        presets: [
-            ['Whole globe', {center: [0, 10], zoom: 2.15, pitch: 0, bearing: 0}],
-            ['Tycho', {center: [-11.36, -43.31], zoom: 5.5, pitch: 0, bearing: 0}],
-            ['Copernicus', {center: [-20.08, 9.62], zoom: 5.5, pitch: 0, bearing: 0}],
-            ['South polar limit', {center: [0, -84], zoom: 3, pitch: 0, bearing: 0}]
-        ]},
     mars: {label: 'Mars', radiusKm: 3389.5, bg: '#2a1710', sky: false,
         presets: [
             ['Whole globe', {center: [-60, 0], zoom: 2.15, pitch: 0, bearing: 0}],
@@ -71,19 +65,13 @@ const BODIES = {
 
 // Irregular bodies. These are NOT MapLibre globes: each is a NASA glTF shape model drawn as a real
 // mesh by src/shapemodel.js, swapped into the stage in place of the MapLibre canvas. Longitudes are
-// planetographic; Phobos (like Mars' moons) is west-positive. See shapes.html for the standalone demo.
-const SHAPE = {
-    ganymede: {label: 'Ganymede', model: 'data/models/ganymede.glb', radiusKm: 2634, northAxis: 'y', lon0: 0, lonDir: 1,
-        // IAU gazetteer centres (planetographic, +West). Convention calibrated against Galileo Regio.
-        features: [{name: 'Galileo Regio', lon: 127, lat: 45}, {name: 'Osiris', lon: 166.3, lat: -38}, {name: 'Tros', lon: 27.3, lat: 11}]},
-    phobos: {label: 'Phobos', model: 'data/models/phobos.glb', radiusKm: [13.0, 11.4, 9.1], northAxis: 'y', lon0: 0, lonDir: -1,
-        features: [{name: 'Stickney', lon: 49, lat: 1}, {name: 'Limtoc', lon: 54, lat: -11}, {name: 'Hall', lon: 21, lat: -80},
-            {name: 'Roche', lon: 177, lat: 53}, {name: "D'Arrest", lon: 179, lat: -39}]}
-};
+// planetographic; Phobos (like Mars' moons) is west-positive. The config (model/radii/calibration/
+// features) is shared with the standalone demo (shapes.html) via src/shapebodies.js.
+const SHAPE = SHAPE_BODIES;
 const isShape = (b) => b in SHAPE;
 
 const twoDaysAgo = new Date(Date.now() - 2 * 864e5).toISOString().slice(0, 10);
-const state = {body: 'earth', projection: 'globe', viirsDate: twoDaysAgo, shapeGraticule: true, labels: true,
+const state = {body: 'earth', projection: 'globe', viirsDate: twoDaysAgo, shapeGraticule: true, labels: true, spin: false, shapeTerminator: false,
     base: {earth: 'open', moon: 'moon-wac', mars: 'mars-viking'},
     overlays: {borders: true, osm: false, hillshade: false, terrain3d: false, quakes: false}};
 
@@ -184,6 +172,8 @@ const map = new maplibregl.Map({
     center: [-100, 30],
     zoom: 2.15,
     maxPitch: 80,
+    // MapLibre 6.x nests WebGL context flags here; preserveDrawingBuffer lets the snapshot button read the globe back.
+    canvasContextAttributes: {preserveDrawingBuffer: true},
     attributionControl: {compact: false},
     style: {
         version: 8,
@@ -211,9 +201,87 @@ function labelsToggle() {
     const cb = el('input', {type: 'checkbox', id: 'l-labels', checked: state.labels});
     cb.addEventListener('change', () => {
         state.labels = cb.checked;
-        if (isShape(state.body)) shapeModel?.setLabels(cb.checked); else apply();
+        if (isShape(state.body)) shapeModel?.setLabels(cb.checked); else { apply(); refreshGlobeMarkers(); }
     });
     return el('div', {className: 'row'}, cb, el('label', {htmlFor: 'l-labels'}, 'Feature labels'));
+}
+
+// "Rotate on axis" — the same toggle for every body. On a mesh it drives ShapeModel.setSpin (spins the
+// model about its pole); on a globe it animates the body's rotation below. Real IAU rotation rates (deg
+// per day, prograde) set the direction + relative speed, scaled for visibility and clamped so slow
+// rotators (the Moon) still turn perceptibly. One formula for both renderers, so they behave alike.
+const ROT_DEG_PER_DAY = {earth: 360.99, moon: 13.18, mars: 350.89};
+const demoSpinDegPerSec = (degPerDay) => Math.min(30, Math.max(2, Math.abs(degPerDay) * 0.03));
+function spinToggle() {
+    const cb = el('input', {type: 'checkbox', id: 'l-spin', checked: state.spin});
+    cb.addEventListener('change', () => setSpin(cb.checked));
+    return el('div', {className: 'row'}, cb, el('label', {htmlFor: 'l-spin'}, 'Rotate on axis'));
+}
+function setSpin(on) {
+    state.spin = !!on;
+    if (isShape(state.body)) shapeModel?.setSpin(state.spin);   // globe spin is driven by the loop below
+}
+// Globe rotation loop: advance the body's longitude under a fixed camera, paused while the user drags.
+let _spinPrev = 0, _spinPaused = false;
+map.getCanvas().addEventListener('pointerdown', () => { _spinPaused = true; });
+window.addEventListener('pointerup', () => { _spinPaused = false; });
+function spinTick(now) {
+    if (state.spin && !_spinPaused && !isShape(state.body) && map.isStyleLoaded() && ROT_DEG_PER_DAY[state.body]) {
+        const dt = _spinPrev ? Math.min(100, now - _spinPrev) : 16;
+        const c = map.getCenter();
+        map.setCenter([c.lng - demoSpinDegPerSec(ROT_DEG_PER_DAY[state.body]) * dt / 1000, c.lat]);   // prograde: surface drifts east
+    }
+    _spinPrev = now;
+    requestAnimationFrame(spinTick);
+}
+requestAnimationFrame(spinTick);
+
+// Named-feature markers on the globe use the SAME DOM pin as the mesh (ShapeModel's .gv-shape-pin),
+// so a marker looks exactly identical on every body — Earth/Moon/Mars globes and the Phobos/Ganymede
+// meshes. maplibregl.Marker handles projection and hides pins behind the globe's far side.
+function buildPin(name) {
+    const node = document.createElement('div');
+    node.className = 'gv-shape-pin';
+    // Interactive like the mesh pins: the shared .gv-shape-pin:hover rule gives the identical hover state,
+    // and cursor:pointer signals the click action (zoom-to-marker, wired where the marker is created).
+    node.style.cssText = 'display:flex;flex-direction:column;align-items:center;white-space:nowrap;cursor:pointer;';
+    const lbl = document.createElement('span'); lbl.className = 'gv-shape-label'; lbl.textContent = name;
+    const dot = document.createElement('span'); dot.className = 'gv-shape-dot';
+    node.append(lbl, dot);
+    return node;
+}
+const nomenCache = {};
+let globeMarkers = [];
+async function refreshGlobeMarkers() {
+    for (const m of globeMarkers) m.remove();
+    globeMarkers = [];
+    const body = state.body;
+    if (isShape(body) || !state.labels || (body !== 'mars' && body !== 'moon')) return;
+    let feats = nomenCache[body];
+    if (!feats) {
+        try { feats = nomenCache[body] = (await (await fetch(ROOT + `data/${body}-nomenclature.geojson`, {cache: 'force-cache'})).json()).features; }
+        catch { return; }
+    }
+    if (state.body !== body || !state.labels) return;   // state changed while the file loaded
+    for (const f of feats) {
+        const node = buildPin(f.properties.name);
+        node.addEventListener('click', () => focusFeature({name: f.properties.name, lngLat: f.geometry.coordinates}));
+        globeMarkers.push(new maplibregl.Marker({element: node, anchor: 'bottom', opacityWhenCovered: '0'})
+            .setLngLat(f.geometry.coordinates).addTo(map));
+    }
+}
+
+// One shared action for clicking a named-feature marker, so globe and mesh behave identically — and so
+// future actions (a details popup/modal) live in a single place. Globe features carry lngLat; mesh
+// features carry lonLat. For now: zoom to the marker and show it in the readout.
+function focusFeature({name, lngLat, lonLat}) {
+    if (isShape(state.body) && lonLat) {
+        shapeModel?.flyTo({lon: lonLat[0], lat: lonLat[1], dist: 2.2});
+    } else if (lngLat) {
+        map.flyTo({center: lngLat, zoom: Math.max(map.getZoom(), 4.5), duration: 1100});
+    }
+    const c = lngLat || lonLat;
+    $('cam').textContent = `${name}\nlon ${(+c[0]).toFixed(2)}°, lat ${(+c[1]).toFixed(2)}°`;
 }
 
 // Collapse / expand the sidebar (desktop), the way a chat app hides its rail. A floating button
@@ -228,7 +296,126 @@ function initSidebarCollapse() {
     $('side-expand')?.addEventListener('click', () => setCollapsed(false));
 }
 initSidebarCollapse();
+
+// Dismiss / restore the dev-stats HUD.
+$('hud-hide')?.addEventListener('click', () => { $('hud').style.display = 'none'; $('hud-show').style.display = 'grid'; });
+$('hud-show')?.addEventListener('click', () => { $('hud').style.display = ''; $('hud-show').style.display = 'none'; });
+// A camera/snapshot button that reads back the active renderer's canvas as a PNG. The maplibregl zoom
+// icons are CSS background-images tinted dark; using the same markup (a dark-stroked SVG data-URI on a
+// .maplibregl-ctrl-icon span) means the dark-theme `filter: invert()` whitens this icon with the rest.
+const CAMERA_ICON = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23333333' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z'/%3E%3Ccircle cx='12' cy='13' r='4'/%3E%3C/svg%3E\")";
+const VIDEO_ICON = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23333333' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='23 7 16 12 23 17 23 7'/%3E%3Crect x='1' y='5' width='15' height='14' rx='2' ry='2'/%3E%3C/svg%3E\")";
+function iconButton(cls, title, bg, onClick) {
+    const b = el('button', {className: cls, type: 'button', title});
+    b.setAttribute('aria-label', title);
+    const icon = el('span', {className: 'maplibregl-ctrl-icon', 'aria-hidden': 'true'});
+    icon.style.backgroundImage = bg;
+    icon.style.backgroundSize = '15px 15px';     // match the +/- glyph weight
+    b.append(icon);
+    b.addEventListener('click', () => onClick(b));
+    return b;
+}
+function snapButton() { return iconButton('maplibregl-ctrl-snapshot', 'Save a snapshot (PNG)', CAMERA_ICON, takeSnapshot); }
+function clipButton() { return iconButton('maplibregl-ctrl-clip', 'Record a 5-second clip', VIDEO_ICON, (b) => recordClip(b, 5)); }
+
+// Record the active renderer's canvas to a short WebM clip (VP9 — small, dependency-free, plays in any
+// browser) and download it. The button shows a red "recording" state and counts the seconds down.
+let _recording = false;
+function recordClip(btn, seconds) {
+    if (_recording) return;
+    const onGlobe = !isShape(state.body);
+    // The mesh draws everything into one WebGL canvas. The globe draws the sky (stars, planets, Earth/Moon
+    // discs, orbit lines) onto a SEPARATE overlay canvas, so we record a composite: each frame, draw the
+    // map then the sky overlay onto a scratch canvas and capture THAT. (pump is started below.)
+    let src, pump = 0;
+    if (!onGlobe && shapeModel?.canvas) {
+        src = shapeModel.canvas;
+    } else {
+        const mapC = map.getCanvas();
+        const comp = el('canvas'); comp.width = mapC.width; comp.height = mapC.height;
+        const cctx = comp.getContext('2d');
+        const loop = () => {
+            map.triggerRepaint();
+            cctx.drawImage(mapC, 0, 0);
+            const sc = sky?.canvas?.(); if (sc) cctx.drawImage(sc, 0, 0, comp.width, comp.height);
+            pump = requestAnimationFrame(loop);
+        };
+        pump = requestAnimationFrame(loop);
+        src = comp;
+    }
+    if (!src?.captureStream) { alert('This browser can’t record the canvas.'); if (pump) cancelAnimationFrame(pump); return; }
+    // Prefer MP4/H.264 — the format AI video editors and NLEs expect — where the browser can record it
+    // (Safari, recent Chrome); fall back to WebM/VP9 only where it can't. No transcoder, no dependency.
+    const types = ['video/mp4;codecs=avc1.4d002a', 'video/mp4;codecs=avc1', 'video/mp4',
+        'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+    const mime = types.find((t) => window.MediaRecorder && MediaRecorder.isTypeSupported(t));
+    if (!mime) { alert('This browser can’t record video from a canvas.'); return; }
+    const ext = mime.includes('mp4') ? 'mp4' : 'webm';
+    const stream = src.captureStream(30);
+    const rec = new MediaRecorder(stream, {mimeType: mime, videoBitsPerSecond: 12e6});
+    const chunks = [];
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    rec.onstop = () => {
+        if (pump) cancelAnimationFrame(pump);
+        const blob = new Blob(chunks, {type: mime.split(';')[0]});
+        const url = URL.createObjectURL(blob);
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        const a = el('a', {href: url, download: `rendered-data-${state.body}-${stamp}.${ext}`});
+        document.body.append(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        _recording = false; btn.classList.remove('recording'); btn.title = 'Record a 5-second clip';
+    };
+    _recording = true; btn.classList.add('recording');
+    let left = seconds; btn.title = `Recording… ${left}s`;
+    const tick = setInterval(() => { left -= 1; if (left > 0) btn.title = `Recording… ${left}s`; else clearInterval(tick); }, 1000);
+    rec.start();
+    setTimeout(() => { if (rec.state !== 'inactive') rec.stop(); clearInterval(tick); }, seconds * 1000);
+}
+// Compose the active renderer's canvas (the WebGL shape model, or the globe + its celestial-sky overlay)
+// into a PNG and hand it to the browser as a download. Everything stays client-side; nothing is uploaded.
+function takeSnapshot() {
+    let src, extra = null;
+    if (isShape(state.body) && shapeModel?.canvas) {
+        shapeModel.redraw?.();                                  // make sure the preserved buffer is current
+        src = shapeModel.canvas;
+    } else {
+        map.triggerRepaint?.();
+        src = map.getCanvas();
+        extra = sky?.canvas?.() || null;                        // stars/Sun/planets drawn on a sibling canvas
+    }
+    if (!src) return;
+    const out = el('canvas'); out.width = src.width; out.height = src.height;
+    // Compose in Display-P3 where the browser supports it, so the export is a wide-gamut, correctly-tagged
+    // PNG that matches a P3 screen instead of a flat untagged-sRGB file. Falls back to sRGB on older browsers.
+    let ctx; try { ctx = out.getContext('2d', {colorSpace: 'display-p3'}); } catch { /* unsupported */ }
+    if (!ctx) ctx = out.getContext('2d');
+    // Paint the same deep-space gradient the page shows behind the canvas, so a sky-off snapshot (whose
+    // empty pixels are transparent) matches what's on screen rather than reading as flat black.
+    const g = ctx.createRadialGradient(out.width * 0.5, out.height * 0.38, 0, out.width * 0.5, out.height * 0.38, Math.hypot(out.width, out.height) * 0.62);
+    g.addColorStop(0, '#0c1522'); g.addColorStop(0.42, '#070b14'); g.addColorStop(0.72, '#02040a'); g.addColorStop(1, '#000000');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, out.width, out.height);
+    // A gentle lift so the render reads as punchy as it does on screen (tune/disable here). Applied to the
+    // canvas content only, not the dark backdrop.
+    ctx.filter = 'saturate(1.18) contrast(1.03) brightness(1.05)';
+    ctx.drawImage(src, 0, 0, out.width, out.height);
+    if (extra) ctx.drawImage(extra, 0, 0, out.width, out.height);
+    ctx.filter = 'none';
+    out.toBlob((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        const a = el('a', {href: url, download: `rendered-data-${state.body}-${stamp}.png`});
+        document.body.append(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }, 'image/png');
+}
+
 map.addControl(new maplibregl.NavigationControl({visualizePitch: true}), 'top-right');
+// Snapshot control: a camera button that stacks directly under the globe's +/- zoom control.
+map.addControl({
+    onAdd() { const g = el('div', {className: 'maplibregl-ctrl maplibregl-ctrl-group'}); g.append(snapButton(), clipButton()); this._c = g; return g; },
+    onRemove() { this._c?.remove(); },
+}, 'top-right');
 const scale = new maplibregl.ScaleControl({unit: 'metric'});
 let scaleOn = false;
 
@@ -273,8 +460,8 @@ function apply() {
         if (on) ensureBuilt(key);
         if (!built.has(key)) continue;
         for (const id of CATALOG[key].layerIds) {
-            // Text (symbol) layers are the "feature labels"; they also require the labels toggle to be on.
-            // This keeps labels contextual — an Earth-only label layer never shows on Moon/Mars.
+            // Text (symbol) layers are "feature labels"; they also need the labels toggle on. Keeps Earth's
+            // country labels contextual (never shown on Moon/Mars) and tied to the Feature labels control.
             const isLabel = map.getLayer(id)?.type === 'symbol';
             map.setLayoutProperty(id, 'visibility', on && (!isLabel || state.labels) ? 'visible' : 'none');
         }
@@ -361,7 +548,7 @@ function renderControls() {
             if (isShape(k)) { enterShape(k); return; }
             const fromShape = isShape(state.body);
             if (fromShape) exitShape();
-            state.body = k; apply(); map.jumpTo(BODIES[k].presets[0][1]);
+            state.body = k; apply(); refreshGlobeMarkers(); map.jumpTo(BODIES[k].presets[0][1]);
             // globe→globe keeps its sky (getBody is dynamic); shape→globe must re-attach the globe sky.
             if (fromShape && $('sky-toggle').checked) attachSky();
         });
@@ -378,7 +565,7 @@ function renderControls() {
     $('base').replaceChildren(...keys.filter((k) => CATALOG[k].group === 'base').map((k) => layerRow(k, 'radio')));
     const ov = keys.filter((k) => CATALOG[k].group === 'overlay').map((k) => layerRow(k, 'checkbox'));
     const b = BODIES[state.body];
-    $('overlays').replaceChildren(labelsToggle(), ...(ov.length ? ov : [el('div', {className: 'note',
+    $('overlays').replaceChildren(labelsToggle(), spinToggle(), ...(ov.length ? ov : [el('div', {className: 'note',
         textContent: `Earth-only overlays are disabled on ${b.label}. Mean radius ${b.radiusKm} km; the renderer still assumes Earth's radius, so no scale bar is shown and the polar caps beyond 85° are not drawn.`})]));
     $('presets').replaceChildren(...b.presets.map(([name, cam]) => {
         const btn = el('button', {textContent: name});
@@ -389,6 +576,30 @@ function renderControls() {
 
 // ---------------------------------------------------------------- shape bodies (irregular)
 let shapeModel = null;
+
+// A +/- zoom control for the mesh scene, built from MapLibre's own control classes so it looks
+// identical to the globe's navigation. Shown only while a shape body is active; drives cam distance.
+const shapeNav = (() => {
+    const grp = el('div', {className: 'maplibregl-ctrl maplibregl-ctrl-group shape-nav'});
+    const mk = (cls, label, factor) => {
+        const b = el('button', {className: cls, type: 'button', title: label});
+        b.setAttribute('aria-label', label);
+        b.append(el('span', {className: 'maplibregl-ctrl-icon', 'aria-hidden': 'true'}));
+        b.addEventListener('click', () => shapeModel?.zoomBy(factor));
+        return b;
+    };
+    grp.append(mk('maplibregl-ctrl-zoom-in', 'Zoom in', 0.7), mk('maplibregl-ctrl-zoom-out', 'Zoom out', 1.43));
+    // Compass/reset button, matching the globe's NavigationControl: clicking it reframes the model.
+    const compass = el('button', {className: 'maplibregl-ctrl-compass', type: 'button', title: 'Reset view'});
+    compass.setAttribute('aria-label', 'Reset view');
+    compass.append(el('span', {className: 'maplibregl-ctrl-icon', 'aria-hidden': 'true'}));
+    compass.addEventListener('click', () => shapeModel?.resetView());
+    grp.append(compass, snapButton(), clipButton());
+    grp.style.display = 'none';
+    return grp;
+})();
+$('stage').appendChild(shapeNav);
+
 const shapeDims = (cfg) => Array.isArray(cfg.radiusKm) ? `${cfg.radiusKm.join(' × ')} km (triaxial)` : `${cfg.radiusKm} km mean radius`;
 // A demo dataset (a box, a traverse line, and points) to show GeoJSON draping onto the mesh surface.
 const sampleGeoJSON = () => ({type: 'FeatureCollection', features: [
@@ -404,6 +615,9 @@ function renderShapeControls() {
         el('span', {className: 'meta', textContent: 'NASA shape model (glTF), drawn as a real mesh.'})));
     const grat = el('input', {type: 'checkbox', id: 'l-grat', checked: state.shapeGraticule});
     grat.addEventListener('change', () => { state.shapeGraticule = grat.checked; shapeModel?.setGraticule(grat.checked); });
+    // Day/night terminator: light the model from the real Sun (true phase) instead of the headlight.
+    const term = el('input', {type: 'checkbox', id: 'l-term-shape', checked: state.shapeTerminator});
+    term.addEventListener('change', () => { state.shapeTerminator = term.checked; shapeModel?.setTerminator(term.checked); });
     // Bring your own data: drape GeoJSON/KML/GPX onto the real mesh surface.
     const file = el('input', {type: 'file', id: 'shape-byo', accept: '.geojson,.json,.kml,.gpx'});
     file.addEventListener('change', async (e) => {
@@ -418,6 +632,8 @@ function renderShapeControls() {
     $('overlays').replaceChildren(
         el('div', {className: 'row'}, grat, el('label', {htmlFor: 'l-grat'}, 'Lon/lat graticule')),
         labelsToggle(),
+        spinToggle(),
+        el('div', {className: 'row'}, term, el('label', {htmlFor: 'l-term-shape'}, 'Day / night terminator')),
         el('div', {className: 'note', style: 'margin-top:8px'}, 'Your data: drape GeoJSON / KML / GPX on the real surface. Read in the browser, nothing uploaded.'),
         el('div', {className: 'row'}, file),
         el('div', {className: 'seg', style: 'margin-top:6px'}, sample, clearBtn),
@@ -435,16 +651,20 @@ async function enterShape(key) {
     state.body = key;
     $('map').style.visibility = 'hidden';      // keep MapLibre alive, just hidden behind the shape canvas
     $('shape').style.display = 'block';
+    shapeNav.style.display = 'block';          // show the mesh +/- zoom control
     if (shapeModel) { shapeModel.remove(); shapeModel = null; }
     const cfg = SHAPE[key];
     renderControls();
     $('cam').textContent = `body: ${cfg.label}\nshape: ${Array.isArray(cfg.radiusKm) ? 'irregular' : 'round'}\nsize: ${shapeDims(cfg)}\nsource: NASA 3D Resources (glTF)`;
     tChange = performance.now(); hud.idleMs = null;
-    shapeModel = new ShapeModel({container: 'shape', body: key, model: cfg.model, label: cfg.label, radiusKm: cfg.radiusKm,
+    shapeModel = new ShapeModel({container: 'shape', body: key, model: cfg.model, sphere: cfg.sphere, texture: cfg.texture, label: cfg.label, radiusKm: cfg.radiusKm,
         graticule: state.shapeGraticule, labels: state.labels, northAxis: cfg.northAxis, lon0: cfg.lon0, lonDir: cfg.lonDir, features: cfg.features,
+        orbitKm: cfg.orbitKm, orbitHours: cfg.orbitHours, siblings: cfg.siblings,
         dist: cfg.dist, autorotate: false});   // the globe bodies here don't auto-spin; keep the playground consistent
     window.gvShape = shapeModel;   // for poking at it from the console
-    shapeModel.on('select', (f) => { $('cam').textContent = `${f.name}\nlon ${f.lon}°, lat ${f.lat}°`; });
+    if (state.spin) shapeModel.setSpin(true);   // carry the "Rotate on axis" toggle onto the mesh
+    if (state.shapeTerminator) shapeModel.setTerminator(true);
+    shapeModel.on('select', (f) => focusFeature({name: f.name, lonLat: [f.lon, f.lat]}));
     try {
         await shapeModel.ready; hud.idleMs = Math.round(performance.now() - tChange);
         if ($('sky-toggle').checked) await attachSky();   // the sky works on the mesh too
@@ -455,8 +675,10 @@ function exitShape() {
     detachSky();
     shapeModel?.remove(); shapeModel = null;
     $('shape').style.display = 'none';
+    shapeNav.style.display = 'none';
     $('map').style.visibility = '';
     map.resize();
+    refreshGlobeMarkers();   // restore globe named-feature pins for the body we return to
     showCam();
 }
 
@@ -537,7 +759,8 @@ map.on('error', (e) => {
 const skyFlags = () => ({
     milkyWay: $('sky-milky').checked, constellations: $('sky-const').checked,
     sun: $('sky-bodies').checked, moon: $('sky-bodies').checked, planets: $('sky-bodies').checked,
-    starLabels: $('sky-labels').checked, grid: $('sky-grid').checked, ecliptic: $('sky-ecl').checked
+    starLabels: $('sky-labels').checked, grid: $('sky-grid').checked, ecliptic: $('sky-ecl').checked,
+    orbit: $('sky-orbit').checked
 });
 const skyTime = () => ($('sky-time').value ? new Date($('sky-time').value) : new Date());
 async function loadSkyCatalog() {
@@ -547,11 +770,13 @@ async function loadSkyCatalog() {
 }
 // Click a reachable world in the sky to fly to it: zoom in, swap the body, ease out to its view.
 function travelTo(body) {
-    if (!BODIES[body] || body === state.body) return;
+    if (body === state.body) return;
+    if (isShape(body)) { enterShape(body); return; }   // the Moon (and other mesh bodies) live in their own scene
+    if (!BODIES[body]) return;
     const z = map.getZoom();
     map.easeTo({zoom: Math.min(z + 1.6, 5), duration: 620, easing: (t) => t * (2 - t)});
     setTimeout(() => {
-        state.body = body; apply();
+        state.body = body; apply(); refreshGlobeMarkers();
         const home = BODIES[body].presets[0][1];
         map.jumpTo({...home, zoom: (home.zoom ?? 1.6) + 1.9});
         map.easeTo({...home, duration: 1100, easing: (t) => 1 - Math.pow(1 - t, 3)});
@@ -569,7 +794,7 @@ async function attachSky() {
             redraw: () => {}, stop: () => shapeModel?.removeStarfield()};
     } else {
         sky = createStarfield(map, {getBody: () => state.body, catalog: cat || undefined, time: skyTime(),
-            navigable: Object.keys(BODIES), onTravel: travelTo, ...skyFlags()});
+            navigable: [...Object.keys(BODIES), ...Object.keys(SHAPE)], onTravel: travelTo, ...skyFlags()});
         if ($('sky-term').checked) skyTerm = createTerminator(map, {getBody: () => state.body, beforeId: 'slot-data', time: skyTime()});
     }
 }
@@ -579,7 +804,7 @@ $('sky-toggle').addEventListener('change', async (e) => {
     if (e.target.checked) { $('sky-opts').style.display = 'block'; await attachSky(); }
     else { $('sky-opts').style.display = 'none'; detachSky(); }
 });
-for (const [id, key] of [['sky-milky', 'milkyWay'], ['sky-const', 'constellations'], ['sky-labels', 'starLabels'], ['sky-grid', 'grid'], ['sky-ecl', 'ecliptic']])
+for (const [id, key] of [['sky-milky', 'milkyWay'], ['sky-const', 'constellations'], ['sky-labels', 'starLabels'], ['sky-grid', 'grid'], ['sky-ecl', 'ecliptic'], ['sky-orbit', 'orbit']])
     $(id).addEventListener('change', (ev) => sky?.set(key, ev.target.checked));
 $('sky-bodies').addEventListener('change', (ev) => { for (const k of ['sun', 'moon', 'planets']) sky?.set(k, ev.target.checked); });
 $('sky-term').addEventListener('change', (ev) => {
@@ -598,3 +823,4 @@ renderProbes();
 showCam();
 runProbes();
 if (isShape(state.body)) enterShape(state.body);   // deep link opened straight onto a shape body
+else map.once('load', refreshGlobeMarkers);        // named-feature pins for an initial Moon/Mars globe

@@ -1,0 +1,25 @@
+{
+  "type": "FeatureCollection",
+  "metadata": {"source": "IAU Gazetteer of Planetary Nomenclature (USGS)", "note": "Curated subset; planetocentric east longitude, -180..180.", "rank": "1=major"},
+  "features": [
+    {"type":"Feature","properties":{"name":"Mare Imbrium","rank":1},"geometry":{"type":"Point","coordinates":[-16,32.8]}},
+    {"type":"Feature","properties":{"name":"Mare Serenitatis","rank":1},"geometry":{"type":"Point","coordinates":[17.5,28]}},
+    {"type":"Feature","properties":{"name":"Mare Tranquillitatis","rank":1},"geometry":{"type":"Point","coordinates":[30.8,8.5]}},
+    {"type":"Feature","properties":{"name":"Mare Crisium","rank":2},"geometry":{"type":"Point","coordinates":[59.1,17]}},
+    {"type":"Feature","properties":{"name":"Oceanus Procellarum","rank":1},"geometry":{"type":"Point","coordinates":[-57,18.4]}},
+    {"type":"Feature","properties":{"name":"Mare Nubium","rank":2},"geometry":{"type":"Point","coordinates":[-16.5,-21.3]}},
+    {"type":"Feature","properties":{"name":"Mare Nectaris","rank":2},"geometry":{"type":"Point","coordinates":[34.6,-15.2]}},
+    {"type":"Feature","properties":{"name":"Mare Fecunditatis","rank":2},"geometry":{"type":"Point","coordinates":[51.9,-7.8]}},
+    {"type":"Feature","properties":{"name":"Mare Frigoris","rank":3},"geometry":{"type":"Point","coordinates":[1.4,56]}},
+    {"type":"Feature","properties":{"name":"Mare Humorum","rank":3},"geometry":{"type":"Point","coordinates":[-38.6,-24.4]}},
+    {"type":"Feature","properties":{"name":"Tycho","rank":1},"geometry":{"type":"Point","coordinates":[-11.36,-43.31]}},
+    {"type":"Feature","properties":{"name":"Copernicus","rank":1},"geometry":{"type":"Point","coordinates":[-20.08,9.62]}},
+    {"type":"Feature","properties":{"name":"Kepler","rank":3},"geometry":{"type":"Point","coordinates":[-38,8.1]}},
+    {"type":"Feature","properties":{"name":"Clavius","rank":2},"geometry":{"type":"Point","coordinates":[-14.4,-58.8]}},
+    {"type":"Feature","properties":{"name":"Plato","rank":2},"geometry":{"type":"Point","coordinates":[-9.3,51.6]}},
+    {"type":"Feature","properties":{"name":"Aristarchus","rank":2},"geometry":{"type":"Point","coordinates":[-47.5,23.7]}},
+    {"type":"Feature","properties":{"name":"Grimaldi","rank":3},"geometry":{"type":"Point","coordinates":[-68.4,-5.5]}},
+    {"type":"Feature","properties":{"name":"Ptolemaeus","rank":3},"geometry":{"type":"Point","coordinates":[-1.8,-9.3]}},
+    {"type":"Feature","properties":{"name":"Apollo 11","rank":2},"geometry":{"type":"Point","coordinates":[23.47,0.67]}}
+  ]
+}

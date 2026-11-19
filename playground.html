@@ -36,14 +36,26 @@
   #side-expand:hover { color: var(--text); border-color: var(--dim); }
   #app.side-collapsed #side-expand { display: grid; }
   #app.side-collapsed #hud { left: 52px; }   /* make room for the floating expand button */
+  /* mesh scene zoom control, positioned like MapLibre's top-right navigation */
+  .shape-nav { position: absolute; top: 10px; right: 10px; z-index: 3; }
+  /* Dark-theme every map control group (globe +/- + compass, mesh +/-, snapshot): black panel, white icons. */
+  .maplibregl-ctrl-group { background: #0d1116; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.12); }
+  .maplibregl-ctrl-group button { background-color: transparent; }
+  .maplibregl-ctrl-group button + button { border-top: 1px solid rgba(255,255,255,.10); }
+  .maplibregl-ctrl-group button:not(:disabled):hover { background-color: rgba(255,255,255,.09); }
+  .maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(1) brightness(1.35); }
+  .maplibregl-ctrl-group button:disabled .maplibregl-ctrl-icon { opacity: .35; }
+  /* Recording state for the clip button: a soft red pulse behind the (still white) icon. */
+  .maplibregl-ctrl-group button.recording { animation: rec-pulse 1s ease-in-out infinite; }
+  @keyframes rec-pulse { 0%,100% { background-color: rgba(220,40,40,.20); } 50% { background-color: rgba(220,40,40,.48); } }
   /* The void around the globe shows this; a deep-space gradient. */
   #map { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 38%, #0c1522 0%, #070b14 42%, #02040a 72%, #000000 100%); }
   /* The shape-model renderer (irregular bodies) draws into this; hidden until a shape body is picked. */
   #shape { position: absolute; inset: 0; display: none; }
   .gv-shape-label { background: rgba(8,11,16,.80); border: 1px solid var(--line); border-radius: 5px;
-    padding: 2px 7px; margin-bottom: 3px; font: 400 11px var(--mono); color: var(--text); backdrop-filter: blur(4px); }
+    padding: 2px 8px; margin-bottom: 4px; font: 400 11.5px var(--gv-font-sans); color: var(--text); backdrop-filter: blur(4px); }
   .gv-shape-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent);
-    box-shadow: 0 0 0 3px rgba(126,230,166,.22), 0 0 10px rgba(126,230,166,.7); }
+    box-shadow: 0 0 0 3px rgba(10,132,255,.22), 0 0 10px rgba(10,132,255,.65); }
   .gv-shape-pin:hover .gv-shape-label { border-color: var(--accent); color: var(--accent); }
   h1 { font-size: 16px; margin: 0; font-weight: 500; letter-spacing: -.01em; }
   .sub { color: var(--dim); font-size: 12px; margin: 2px 0 12px; }
@@ -71,8 +83,23 @@
   table { width: 100%; border-collapse: collapse; font: 11px var(--mono); }
   td { padding: 2px 0; vertical-align: top; } td:last-child { text-align: right; color: var(--text); }
   td:first-child { color: var(--dim); padding-right: 8px; }
-  #hud { position: absolute; top: 10px; left: 10px; background: rgba(13,18,22,.88); border: 1px solid var(--line);
+  #hud { position: absolute; top: 12px; left: 12px; background: rgba(13,18,22,.88); border: 1px solid var(--line);
     border-radius: 8px; padding: 8px 10px; width: 250px; backdrop-filter: blur(6px); }
+  /* HUD header: brand mark + title on the left, dismiss button on the right, over a divider */
+  .hud-head { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; padding-bottom: 7px;
+    border-bottom: 1px solid var(--line); }
+  .hud-logo { height: 13px; width: auto; color: var(--text); flex: 0 0 auto; }
+  .hud-title { font: 500 12px var(--gv-font-sans); color: var(--text); letter-spacing: -.01em; }
+  #hud-hide { margin-left: auto; background: none; border: 0; color: var(--dim); font-size: 16px; line-height: 1;
+    cursor: pointer; padding: 0 2px; flex: 0 0 auto; }
+  #hud-hide:hover { color: var(--text); border: 0; }
+  /* button to bring the HUD back — matches the sidebar-expand button so the two line up when collapsed */
+  #hud-show { position: absolute; top: 12px; left: 12px; z-index: 4; display: none; width: 30px; height: 30px;
+    place-items: center; background: rgba(13,18,22,.88); border: 1px solid var(--line); border-radius: 7px;
+    color: var(--dim); cursor: pointer; backdrop-filter: blur(6px); padding: 0; }
+  #hud-show:hover { color: var(--text); border-color: var(--dim); }
+  #hud-show svg { width: 16px; height: 16px; }
+  #app.side-collapsed #hud-show { left: 54px; }   /* clear the sidebar-expand button when collapsed */
   #errors { position: absolute; bottom: 34px; left: 10px; max-width: 520px; display: grid; gap: 4px; }
   .err { background: rgba(58,20,18,.94); border: 1px solid var(--no); color: #ffd9d5; border-radius: 6px;
     padding: 5px 8px; font: 11px var(--mono); word-break: break-word; }
@@ -93,7 +120,7 @@
     /* desktop collapse controls don't apply to the mobile bottom-sheet */
     .side-toggle, #side-expand { display: none !important; }
     #stage { position: absolute; inset: 0; }
-    #hud { display: none; }                               /* dev stats panel: off on phones */
+    #hud, #hud-show { display: none !important; }         /* dev stats panel: off on phones */
     #errors { bottom: calc(var(--sheet-peek, 84px) + 10px); left: 8px; right: 8px; max-width: none; z-index: 7; }
     /* keep MapLibre's attribution and controls above the collapsed sheet */
     .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left { bottom: calc(var(--sheet-peek, 84px) + 2px); }
@@ -158,6 +185,7 @@
       <div class="row"><input type="checkbox" id="sky-labels"><label for="sky-labels">Star labels</label></div>
       <div class="row"><input type="checkbox" id="sky-grid"><label for="sky-grid">RA / Dec grid</label></div>
       <div class="row"><input type="checkbox" id="sky-ecl"><label for="sky-ecl">Ecliptic</label></div>
+      <div class="row"><input type="checkbox" id="sky-orbit"><label for="sky-orbit">Orbital plane</label></div>
       <div class="row"><input type="checkbox" id="sky-term"><label for="sky-term">Day / night terminator</label></div>
       <div class="seg" style="margin-top:6px">
         <button id="sky-now">Now</button>
@@ -187,7 +215,17 @@
     </button>
     <div id="map"></div>
     <div id="shape"></div>
-    <div id="hud"><table id="hudt"></table></div>
+    <div id="hud">
+      <div class="hud-head">
+        <svg class="hud-logo" viewBox="0 0 325 424" fill="currentColor" aria-hidden="true"><path d="M0 0H113A212 212 0 0 1 236.973 383.973L174.332 321.332A130 130 0 0 0 104 82H0ZM0 164H110A48 48 0 0 1 110 260H0ZM0 342H79L161 424H0Z"/></svg>
+        <span class="hud-title">Rendered Data</span>
+        <button type="button" id="hud-hide" title="Hide stats" aria-label="Hide stats">×</button>
+      </div>
+      <table id="hudt"></table>
+    </div>
+    <button type="button" id="hud-show" title="Show stats" aria-label="Show stats">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M12 20V4M20 20v-6"/></svg>
+    </button>
     <div id="errors"></div>
     <div id="fatal"></div>
   </main>

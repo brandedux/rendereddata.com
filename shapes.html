@@ -46,9 +46,9 @@
     border-radius: 999px; padding: 5px 14px; backdrop-filter: blur(6px); }
   /* feature pins drawn by src/shapemodel.js */
   .gv-shape-label { background: rgba(8,11,16,.80); border: 1px solid var(--gv-hairline); border-radius: 5px;
-    padding: 2px 7px; margin-bottom: 3px; font: 400 11px var(--gv-font-mono); color: var(--gv-ink); backdrop-filter: blur(4px); }
+    padding: 2px 8px; margin-bottom: 4px; font: 400 11.5px var(--gv-font-sans); color: var(--gv-ink); backdrop-filter: blur(4px); }
   .gv-shape-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--gv-accent);
-    box-shadow: 0 0 0 3px rgba(126,230,166,.22), 0 0 10px rgba(126,230,166,.7); }
+    box-shadow: 0 0 0 3px rgba(10,132,255,.22), 0 0 10px rgba(10,132,255,.65); }
   .gv-shape-pin:hover .gv-shape-label { border-color: var(--gv-accent); color: var(--gv-accent); }
   @media (max-width: 760px) {
     #app { grid-template-columns: 1fr; grid-template-rows: 46vh 1fr; }
@@ -90,6 +90,7 @@
 
 <script type="module">
 import {ShapeModel} from './src/maps.js';
+import {SHAPE_BODIES} from './src/shapebodies.js';
 
 const $ = (id) => document.getElementById(id);
 const logEl = $('log');

@@ -104,7 +104,7 @@ function startHero() {
         const dt = Math.min(100, now - last); last = now;
         if (spinning && !$('view-product').hidden && !document.hidden) {
             const c = heroMap.getCenter();
-            heroMap.jumpTo({center: [c.lng + dt * 0.004, c.lat]});   // about 4 degrees per second
+            heroMap.jumpTo({center: [c.lng - dt * 0.004, c.lat]});   // ~4°/s, prograde (surface drifts east)
         }
         if (spinning) requestAnimationFrame(tick);
     };

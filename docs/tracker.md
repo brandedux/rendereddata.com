@@ -5,6 +5,82 @@ A running status log. Newest entry on top. For architecture and the ship-it guid
 
 ---
 
+## 2026-11-15 (evening) — True-scale moon systems, orbits, scientific accuracy, capture (post-v1)
+
+**Uncommitted follow-ups on top of v1 (`0fce660`, not yet pushed). All verified in-browser.**
+
+- **Moon views rebuilt as a true-scale 3D system.** The primary (Mars/Jupiter) is no longer faked in a
+  rotation-only sky pass — it's a real object in the main pass at its **true distance and radius in
+  moon-radii** (Mars 840 R / 303 R from Phobos → 42.4°; Jupiter 406 R / 27 R from Ganymede → 7.7°). It
+  barely parallaxes as you orbit (correct) and recedes naturally as you pull back. Far plane + zoom-out
+  range now scale to the system size (`_sceneFar`, per-body `_distMax`). The old parent scene-zoom hack
+  is gone.
+- **Real orbit rings.** New **"Orbital plane"** sky toggle. Each moon's orbit is a true-radius circle
+  centred on its primary, passing through the moon — so zoomed in it reads as the plane edge-on through
+  the body, and zoomed out it's a clean circle with the planet at its centre (fixes "Ganymede's orbit
+  doesn't look right"). `Cel.orbitNormal()` derives the plane from the primary's IAU pole / the body's
+  heliocentric elements; globe bodies draw it as an ecliptic-style great circle.
+- **Deimos added as a sibling moon.** Loads the NASA mesh the user supplied (`data/models/24879_Deimos…glb`)
+  and draws it in the Phobos scene at its true position on its real orbit, Sun-lit, **with its own orbit
+  ring and axis rotation** — same functionality as Phobos/Mars. Pulled back, the Phobos view shows the
+  whole Martian system: Mars centre, Phobos on the inner (teal) orbit, Deimos on the outer (blue) orbit.
+  True apparent size is a sub-0.05° speck, so its on-screen size is floored for visibility (distance +
+  direction stay true). Config via a `siblings` array — extensible to the Galilean moons for Ganymede.
+- **Data-driven rotation.** `data/rotation.json` is the auditable matrix of sidereal periods, spin sense
+  and IAU poles; added Jupiter's IAU elements to `celestial.js`. "Rotate on axis" now spins the moon,
+  its primary, and sibling moons each on their **real pole at their true relative rate** (Mars 3.2× slower
+  than Phobos; Jupiter 17× faster than Ganymede; all prograde, poles within ~0.05°).
+- **Sun true-to-scale.** The Sun is sized by its real angular diameter per world (Earth/Moon ~0.53°,
+  Mars/Phobos ~0.35°, Ganymede ~0.10°) in both renderers — ~5× smaller from Ganymede than from Earth.
+- **Planet night-side + Mars-visibility.** Soft terminator + raised night floor on the planet shader, so a
+  "new"-phase primary reads as a dim silhouetted disc, not a void (Mars cycles through phases every 7.65 h
+  from Phobos — it wasn't a bug, just near-"new").
+- **Snapshot + video capture.** A **camera button** (PNG) and a **video button** (5-second clip) stack
+  under the +/- control on both renderers (`preserveDrawingBuffer` enabled; globe repaints are pumped so
+  `captureStream` gets frames). Clips record **MP4/H.264 where the browser supports it** (Safari, recent
+  Chrome), falling back to WebM/VP9 — the format AI editors want, no transcoder. Snapshots compose in
+  **Display-P3** and export a tagged, wide-gamut PNG with a gentle saturation/contrast lift so they match
+  the screen instead of reading flat. Space backdrop gradient baked in so sky-off shots aren't flat black.
+- **Earth spin direction fixed.** Both the home-page hero globe and the playground spun **retrograde**
+  (increasing centre longitude scrolls the surface west); flipped both to prograde (surface drifts east),
+  verified against North America.
+- **UI polish.** Dark-themed the zoom/compass/snapshot controls (black panels, white icons); nav labels
+  **"Product" → "Maps"** and **"Developers" → "Documentation"**; tightened the landing-nav padding so the
+  logo/CTA align with the content below; the Developers sidebar's right divider now spans full height even
+  with every group collapsed; camera icon sized to match the +/- glyphs.
+- **Docs:** new **`docs/api-keys-plan.md`** — simplest path for metered API keys: GitHub Pages for
+  everything static, Railway only for the one dynamic piece (the `/v1` gateway, since `serve.mjs` already
+  runs there unchanged); Phase 1 issues keys with a local mint script, no backend. Nothing left to generate
+  keys today — the gateway only validates/meters, so that's the open build item.
+
+## 2026-11-15 (later) — Named features + one marker everywhere + scene zoom (post-v1)
+
+**Uncommitted follow-ups on top of v1 (`0fce660`, not yet pushed). All verified in-browser.**
+
+- **Named features on Mars & the Moon.** Curated IAU/USGS nomenclature bundled as
+  `data/{mars,moon}-nomenclature.geojson` (18/19 features: Olympus Mons, Valles Marineris, the Tharsis
+  Montes, Hellas/Argyre/…, the maria, Tycho, Copernicus, Apollo 11, …), registered in the manifest with
+  IAU/USGS attribution so they're license-tagged + probe-gated. On by default; coords verified against
+  the basemaps (labels land on the right craters/volcanoes).
+- **One marker component across ALL bodies.** Dropped the globe's MapLibre symbol/circle/pill-image
+  layers entirely; the globe now renders each named feature with `maplibregl.Marker` wrapping the **same
+  DOM pin** (`.gv-shape-pin`/`.gv-shape-label`/`.gv-shape-dot`) the mesh uses. So a marker is pixel-for-
+  pixel identical on Earth/Moon/Mars globes and the Phobos/Ganymede meshes — same dark pill, round blue
+  dot, font, glow, and far-side hiding (`opacityWhenCovered:'0'`).
+- **Consistent interactivity.** Globe pins are now interactive like the mesh: identical `:hover` (label
+  turns accent-blue) and a click action. Both renderers route clicks through **one shared
+  `focusFeature()`** — today it zooms to the marker; a details popup/modal later is a few lines there and
+  applies everywhere at once.
+- **Labels are contextual + unified control.** The single **Feature labels** toggle drives named-feature
+  markers on every body; Earth's country labels never bleed onto Moon/Mars. (`GlobeMap.setLabels` and the
+  playground's `apply()` made label visibility context-aware.)
+- **Mesh navigation + scene zoom.** Added a MapLibre-styled **+/- control** to the mesh scene
+  (`ShapeModel.zoomBy`, eased), and the parent planet now **scales with the zoom** — zooming out from a
+  moon also zooms out from Mars/Jupiter, so the whole scene zooms together.
+- **Rename + housekeeping:** base-layer id `gv-base-open` → `base-open`; `keys.json`/`leads/` untracked.
+- **Bugs fixed:** feature stems hid with labels; a `display:''` that silently dropped the mesh pin's
+  flex layout (collapsing the dot into a sliver); the leftover green dot-glow unified to the blue accent.
+
 ## 2026-11-15 — v1: parent planets, contact form, labels toggle, sidebar collapse
 
 **Tagging v1. Everything below shipped and was verified in-browser today.**

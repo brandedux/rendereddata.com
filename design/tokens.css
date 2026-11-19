@@ -120,7 +120,9 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px s
 /* ---------- nav and tabs ---------- */
 .gv-nav { position: sticky; top: 0; z-index: 20; background: rgba(8, 11, 14, .82); backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--gv-hairline-soft); }
-.gv-nav .gv-wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: var(--gv-nav-h); max-width: none; }
+.gv-nav .gv-wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: var(--gv-nav-h); max-width: none;
+  /* Tighter than the section gutter so the logo and the CTA line up with the controls below the header. */
+  padding-inline: 20px; }
 .gv-logo { display: flex; align-items: center; gap: 9px; font-weight: 500; font-size: 17px; text-decoration: none; white-space: nowrap; }
 /* R·D monogram (inline SVG, design/logo.svg), sized to sit beside the wordmark. */
 .gv-logo-mark { display: block; flex: none; height: 26px; width: auto; }

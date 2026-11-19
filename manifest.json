@@ -122,7 +122,7 @@
       "url": "https://tiles.openfreemap.org/planet",
       "probe": "https://tiles.openfreemap.org/planet",
       "license": "ODbL 1.0 (OpenStreetMap)",
-      "attribution": "OpenFreeMap, © OpenMapTiles, © OpenStreetMap contributors",
+      "attribution": "OpenFreeMap, \u00a9 OpenMapTiles, \u00a9 OpenStreetMap contributors",
       "commercial": "review",
       "share_alike": true,
       "store": "quarantine",
@@ -190,6 +190,36 @@
       "share_alike": false,
       "store": "main",
       "verified": "not probed at build"
+    },
+    {
+      "id": "mars-nomenclature",
+      "label": "Named features (IAU)",
+      "kind": "geojson",
+      "body": "mars",
+      "hosted": "bundled",
+      "url": "data/mars-nomenclature.geojson",
+      "probe": "data/mars-nomenclature.geojson",
+      "license": "Public domain (IAU/USGS Gazetteer)",
+      "attribution": "IAU / USGS Gazetteer of Planetary Nomenclature",
+      "commercial": "ok",
+      "share_alike": false,
+      "store": "main",
+      "verified": "2026-11-15 build"
+    },
+    {
+      "id": "moon-nomenclature",
+      "label": "Named features (IAU)",
+      "kind": "geojson",
+      "body": "moon",
+      "hosted": "bundled",
+      "url": "data/moon-nomenclature.geojson",
+      "probe": "data/moon-nomenclature.geojson",
+      "license": "Public domain (IAU/USGS Gazetteer)",
+      "attribution": "IAU / USGS Gazetteer of Planetary Nomenclature",
+      "commercial": "ok",
+      "share_alike": false,
+      "store": "main",
+      "verified": "2026-11-15 build"
     }
   ]
 }

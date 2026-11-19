@@ -35,6 +35,7 @@ export function iauElements(body, d, T) {
     if (body === 'moon') return {a0: 269.9949 + 0.0031 * T, d0: 66.5392 + 0.0130 * T, W: 38.3213 + 13.17635815 * d - 1.4e-12 * d * d};
     if (body === 'mars') return {a0: 317.68143 - 0.1061 * T, d0: 52.88650 - 0.0609 * T, W: 176.630 + 350.89198226 * d};
     if (body === 'ganymede') return {a0: 268.20 - 0.009 * T, d0: 64.51 + 0.003 * T, W: 44.064 + 50.3176081 * d};
+    if (body === 'jupiter') return {a0: 268.056595 - 0.006499 * T, d0: 64.495303 + 0.002413 * T, W: 284.95 + 870.5360000 * d};   // IAU System III
     if (body === 'phobos') return {a0: 317.68 - 0.108 * T, d0: 52.90 - 0.061 * T, W: 35.06 + 1128.8445850 * d};
     return {a0: 0.00 - 0.641 * T, d0: 90.00 - 0.557 * T, W: 190.147 + 360.9856235 * d};   // Earth
 }
@@ -238,16 +239,27 @@ export function skyBodies(observer, date) {
     };
     const out = [];
     const sun = eqFrom([0, 0, 0]);                        // the Sun sits at the heliocentric origin
-    out.push({name: 'Sun', kind: 'sun', ra: sun.ra, dec: sun.dec, color: '#fff4d6', mag: -26});
-    const parent = {phobos: 'mars', ganymede: 'jupiter'}[observer];   // a moon can't see its own primary (zero distance)
+    out.push({name: 'Sun', kind: 'sun', ra: sun.ra, dec: sun.dec, color: '#fff4d6', mag: -26, dist: sun.dist});
+    // Skip the observer, its primary (zero distance) and — for the Moon — Earth, which is drawn specially
+    // below as a resolved, phased disc rather than a point planet.
+    const skip = new Set([observer, {phobos: 'mars', ganymede: 'jupiter', moon: 'earth'}[observer]].filter(Boolean));
     for (const n of ['Mercury', 'Venus', 'Earth', 'Mars', 'Jupiter', 'Saturn']) {
-        if (n.toLowerCase() === observer || n.toLowerCase() === parent) continue;
+        if (skip.has(n.toLowerCase())) continue;
         const p = eqFrom(helioEcl(PLANETS[n], T));
         out.push({name: n, kind: 'planet', ra: p.ra, dec: p.dec, color: PLANETS[n][12], mag: n === 'Earth' ? -3.0 : PLANETS[n][13]});
     }
-    if (observer === 'earth') {                           // only Earth's own sky shows Earth's Moon
+    // The Earth–Moon pair sees each other as big, phased discs (not points): the Moon is ~0.5° from Earth,
+    // Earth ~1.9° (and 4× brighter) from the Moon. angRad = the body's true angular radius (rad); illum its
+    // lit fraction (Earth's is the Moon's complement). Rendered true-to-size with a phase by the starfield.
+    const AU_KM = 1.495978707e8;
+    if (observer === 'earth') {
         const m = moonOfDate(date);
-        out.push({name: 'Moon', kind: 'moon', ra: m.ra, dec: m.dec, color: '#dce0e6', mag: -10, illum: m.illum});
+        out.push({name: 'Moon', kind: 'moon', ra: m.ra, dec: m.dec, color: '#dce0e6', mag: -10,
+            illum: m.illum, angRad: Math.atan(1737.4 / 385000)});
+    } else if (observer === 'moon') {
+        const m = moonOfDate(date), e = eqFrom(helioEcl(PLANETS.Earth, T));
+        out.push({name: 'Earth', kind: 'earth', ra: e.ra, dec: e.dec, color: '#8ab4ff', mag: -3.8,
+            illum: 1 - m.illum, angRad: Math.atan(6371 / (e.dist * AU_KM))});
     }
     return out;
 }
@@ -267,6 +279,27 @@ export function sunDirForBody(body, date) {
     }
     const s = sunRaDecJ2000(date);
     return eqToVec(s.ra, s.dec);
+}
+
+// Unit normal (J2000 equatorial) of the plane the body orbits in — drives the "orbit" sky line, the way
+// the ecliptic line draws Earth's orbital plane. A moon's orbit lies in its primary's equatorial (Laplace)
+// plane, so the normal is the primary's IAU pole; a planet's is the normal of its heliocentric orbit
+// (from inclination I and ascending node Ω); Earth's Moon rides ~5.145° off the ecliptic about its node.
+export function orbitNormal(body, date) {
+    const {d, T} = julian(date), eps0 = rad(23.43928);
+    const eclToEqV = (v) => V.unit([v[0], v[1] * Math.cos(eps0) - v[2] * Math.sin(eps0), v[1] * Math.sin(eps0) + v[2] * Math.cos(eps0)]);
+    const primary = {phobos: 'mars', ganymede: 'jupiter'}[body];
+    if (primary) { const e = iauElements(primary, d, T); return eqToVec(e.a0, e.d0); }   // primary's pole = orbit normal
+    if (body === 'moon') {                                   // Earth's Moon: 5.145° to the ecliptic about the mean node
+        const Om = rad(125.0445 - 1934.1362 * T), I = rad(5.1454);
+        return eclToEqV([Math.sin(I) * Math.sin(Om), -Math.sin(I) * Math.cos(Om), Math.cos(I)]);
+    }
+    const p = PLANETS[{earth: 'Earth', mars: 'Mars', jupiter: 'Jupiter'}[body]];
+    if (p) {                                                 // planet heliocentric orbit normal from I, Ω
+        const I = rad(p[2] + p[8] * T), Om = rad(p[5] + p[11] * T);
+        return eclToEqV([Math.sin(I) * Math.sin(Om), -Math.sin(I) * Math.cos(Om), Math.cos(I)]);
+    }
+    return eclToEqV([0, 0, 1]);                              // fallback: the ecliptic pole
 }
 
 // ---- star colour from B-V (Ballesteros 2012 approximation) ------------------

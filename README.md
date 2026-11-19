@@ -26,6 +26,38 @@ node serve.mjs
 Open http://localhost:8787/ for the site, or http://localhost:8787/playground.html for the playground alone (pass a port to change it: `node serve.mjs 9000`).
 It must be served over http; opening `index.html` from disk will not work.
 
+## Download the SDK
+
+The SDK is a **library**, not this whole repo — `src/maps.js` (which exports `GlobeMap`, `ShapeModel`,
+`maplibregl`) plus the exact files it loads at runtime. To produce a self-contained, self-hostable
+bundle of just that:
+
+```
+node build-sdk.mjs
+```
+
+This writes `dist/rendereddata-maps-sdk/` (and `dist/rendereddata-maps-sdk.zip`) containing only the
+SDK's import graph and runtime assets, laid out so `import {GlobeMap} from './src/maps.js'` works on
+any static host — no build step, no install, no key. It includes a `README.md` and a ready-to-run
+`example.html`. Serve the folder (`npx serve .`) and open `example.html`.
+
+The site's **Download the SDK** button serves this zip from the repo's latest GitHub release. To cut
+a release after a change:
+
+```
+node build-sdk.mjs
+gh release create v$(node -p "require('./package.json').version") \
+  dist/rendereddata-maps-sdk.zip --title "SDK v$(node -p "require('./package.json').version")"
+```
+
+The download link (`releases/latest/download/rendereddata-maps-sdk.zip`) is stable across releases.
+
+The bundle is **portable to any sub-path** (e.g. a CDN at `https://cdn.example.com/rdm/`): every
+bundled asset resolves relative to the module URL, not the page. Keep `manifest.json`, `data/`,
+`fonts/` and `vendor/` as siblings of `src/`. The core path (Earth basemap, borders, place search,
+labels) works fully offline; imagery, terrain, OSM, quakes and the Moon/Mars Trek mosaics stream from
+their third-party sources (each probed live before it draws).
+
 ## API keys
 
 None. There is no token, account or signup anywhere in this POC. That is the point of it.
@@ -57,7 +89,7 @@ await map.addUserWorld(imageFileOrUrl);   // wrapped on the sphere in the browse
 console.log(layer.probe.state, layer.license);    // 'ok'  'user-supplied, license unknown'
 
 // place search over the bundled names (self-hosted, nothing leaves the page)
-map.flyToPlace(map.search('Lake Tahoe')[0]);
+map.flyToPlace(map.search('Argentina')[0]);   // bundled index is the Natural Earth countries (Earth only)
 
 // draw & measure (geodesic length / spherical area)
 const draw = map.draw({mode: 'polygon'});
@@ -82,6 +114,48 @@ view to it and swaps the model. Disable with `addStarfield({hotspots: false})`.
 A layer whose probe has not passed cannot be enabled; `addLayer` / `setBase` reject instead of
 drawing a silent fallback. The particle field defaults to an **illustrative** flow, not a forecast;
 pass your own `field(lng, lat)` to drive it from real wind/current data.
+
+### Available bodies
+
+Two renderers draw two kinds of world. `GlobeMap` handles round bodies on MapLibre's sphere;
+`ShapeModel` handles irregular bodies from a mesh (next section). Which worlds exist, and which
+layers each supports, is introspectable at runtime — the table below is the current state.
+
+**`GlobeMap` — round worlds.** Three today. Pick one at construction (`body`) or switch at runtime
+(`setBody`). Every base/overlay is gated on its own live probe before it draws.
+
+| `body` | Label | Sky | Default base | Base layers | Overlays |
+| --- | --- | --- | --- | --- | --- |
+| `earth` | Earth | yes | `base-open` | `base-open`, `bluemarble`, `s2`, `viirs` | `borders`, `hillshade`, `terrain3d`, `osm`, `quakes` |
+| `moon`  | Moon  | no  | `moon-wac`   | `moon-wac` | — |
+| `mars`  | Mars  | no  | `mars-viking`| `mars-viking`, `mars-mola` | — |
+
+```js
+const map = new GlobeMap({container: 'map', body: 'earth'});
+await map.ready;
+map.bodies;                 // ['earth', 'moon', 'mars']        — the authoritative list
+map.basesFor('mars');       // ['mars-viking', 'mars-mola']
+map.overlaysFor('earth');   // ['borders', 'hillshade', 'terrain3d', 'osm', 'quakes']
+await map.setBody('mars', {base: 'mars-mola'});
+```
+
+Any id outside that set throws: `setBody('phobos')` → `Error: Unknown body: phobos`. Irregular bodies
+like Phobos are not `GlobeMap` worlds — they use `ShapeModel` below.
+
+**`ShapeModel` — irregular worlds.** Not a fixed list: hand it any NASA glTF (`.glb`). Bundled under
+`data/models/`, plus a round body drawn as a textured sphere (`sphere: true` + a `texture`):
+
+| How | `body` id | Sky / parent orbit |
+| --- | --- | --- |
+| `model: 'data/models/phobos.glb'` | `phobos` | around Mars (sibling: Deimos) |
+| `model: 'data/models/ganymede.glb'` | `ganymede` | around Jupiter |
+| `model: 'data/models/24879_Deimos_1_1000.glb'` | `deimos` | sibling of Phobos |
+| `sphere: true, texture: 'data/textures/moon.jpg'` | `moon` | around Earth |
+
+The astronomy engine (`src/celestial.js`) carries IAU orientation and ephemerides for `earth`, `moon`,
+`mars`, `phobos`, `ganymede` and `jupiter` (as a parent). Set `opts.body` to one of these to get the
+correct sky, Sun direction and parent orbit; any other id still renders the mesh, just without a
+body-specific sky.
 
 ### Irregular bodies (shape models)
 
