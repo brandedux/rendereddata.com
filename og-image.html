@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>og-image</title>
+<style>
+  @font-face { font-family: "Inter Tight"; src: url("design/fonts/InterTight-var.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: block; }
+  @font-face { font-family: "JetBrains Mono"; src: url("design/fonts/JetBrainsMono-var.woff2") format("woff2"); font-weight: 100 800; font-style: normal; font-display: block; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1200px; height: 630px; overflow: hidden; background: #fff; }
+  .maplibregl-ctrl, .maplibregl-control-container { display: none !important; }
+  #card {
+    position: relative; width: 1200px; height: 630px; background: #080b0e; overflow: hidden;
+    font-family: "Inter Tight", system-ui, sans-serif; color: #eef3f1;
+    background-image: radial-gradient(60% 80% at 78% 42%, rgba(18,70,130,.55) 0%, rgba(10,30,60,.18) 42%, rgba(8,11,14,0) 72%);
+  }
+  #hero-globe { position: absolute; top: 120px; right: 72px; width: 380px; height: 380px; }
+  #content { position: absolute; inset: 0; padding: 64px 72px; display: flex; flex-direction: column; }
+  .brand { display: flex; align-items: center; gap: 20px; }
+  .brand svg { width: 42px; height: auto; display: block; }
+  .brand .name { font-size: 34px; font-weight: 500; letter-spacing: -.01em; }
+  h1 { margin-top: auto; font-size: 60px; line-height: 1.1; font-weight: 700; letter-spacing: -.03em; white-space: nowrap; }
+  h1 .accent { color: #2f7cf0; }
+  .lede { margin-top: 26px; font-size: 25px; font-weight: 300; color: #9aa6a3; max-width: 640px; letter-spacing: -.01em; line-height: 1.3; }
+  .foot { margin-top: 32px; font-family: "JetBrains Mono", monospace; font-size: 19px; letter-spacing: .04em; color: #2f7cf0; }
+  .foot .dot { color: #44506a; margin: 0 10px; }
+</style>
+</head>
+<body>
+<div id="card">
+  <div id="hero-globe" aria-hidden="true"></div>
+  <div id="content">
+    <div class="brand">
+      <svg viewBox="0 0 325 424" fill="#fff" aria-hidden="true"><path d="M0 0H113A212 212 0 0 1 236.973 383.973L174.332 321.332A130 130 0 0 0 104 82H0ZM0 164H110A48 48 0 0 1 110 260H0ZM0 342H79L161 424H0Z"/></svg>
+      <span class="name">Rendered Data</span>
+    </div>
+    <h1>Build planetary maps for<br><span class="accent">any world.</span></h1>
+    <p class="lede">Open, self-hostable. Earth, the Moon, Mars — and every world after.</p>
+    <p class="foot">No signup<span class="dot">·</span>Open source<span class="dot">·</span>Self-host it</p>
+  </div>
+</div>
+<script type="module">
+  import {GlobeMap} from './src/maps.js';
+  await document.fonts.ready;
+  const map = new GlobeMap({container: 'hero-globe', body: 'earth', base: 'bluemarble',
+      controls: false, background: 'transparent',
+      mapOptions: {preserveDrawingBuffer: true, canvasContextAttributes: {preserveDrawingBuffer: true}}});
+  await map.ready;
+  map.jumpTo({center: [18, 16], zoom: 1.35});
+  map.addStarfield({hotspots: false, constellations: false, grid: false, sun: false, moon: false, planets: false});
+  await new Promise(r => setTimeout(r, 1200));   // let imagery + stars settle
+  map.redraw?.(); map.maplibre?.triggerRepaint?.();
+  await new Promise(r => setTimeout(r, 400));
+
+  // Compose the finished card (globe canvas + DOM text/logo) onto a 2x canvas and expose a PNG data URL.
+  const S = 1, card = document.getElementById('card').getBoundingClientRect();
+  const cv = document.createElement('canvas'); cv.width = 1200 * S; cv.height = 630 * S;
+  const x = cv.getContext('2d'); x.scale(S, S);
+  const rel = (r) => ({x: r.left - card.left, y: r.top - card.top, w: r.width, h: r.height});
+
+  // background + glow (same as the CSS)
+  x.fillStyle = '#080b0e'; x.fillRect(0, 0, 1200, 630);
+  const g = x.createRadialGradient(0.78 * 1200, 0.42 * 630, 0, 0.78 * 1200, 0.42 * 630, 0.8 * 630);
+  g.addColorStop(0, 'rgba(18,70,130,0.55)'); g.addColorStop(0.42, 'rgba(10,30,60,0.18)'); g.addColorStop(0.72, 'rgba(8,11,14,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 1200, 630);
+
+  // the live globe (and its starfield), drawn at their on-card positions
+  let globeDrawn = false;
+  for (const c of document.querySelectorAll('#hero-globe canvas')) {
+    const r = rel(c.getBoundingClientRect());
+    try { x.drawImage(c, r.x, r.y, r.w, r.h); globeDrawn = true; } catch (e) {}
+  }
+
+  // logo mark
+  const lr = rel(document.querySelector('.brand svg').getBoundingClientRect());
+  x.save(); x.translate(lr.x, lr.y); x.scale(lr.w / 325, lr.h / 424); x.fillStyle = '#fff';
+  x.fill(new Path2D('M0 0H113A212 212 0 0 1 236.973 383.973L174.332 321.332A130 130 0 0 0 104 82H0ZM0 164H110A48 48 0 0 1 110 260H0ZM0 342H79L161 424H0Z'));
+  x.restore();
+
+  // text. Block elements give one rect; multi-line elements get manual line layout.
+  // baseline within a line box = top + (lineHeight - fontSize)/2 + ascent(~0.74*fontSize)
+  x.textBaseline = 'alphabetic';
+  const setFont = (cs) => { x.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`; };
+  const baseOf = (yTop, i, lh, fs) => yTop + i * lh + (lh - fs) / 2 + fs * 0.74;
+
+  // brand name
+  {
+    const el = document.querySelector('.brand .name'), cs = getComputedStyle(el), r = rel(el.getBoundingClientRect());
+    setFont(cs); x.fillStyle = '#eef3f1'; x.fillText('Rendered Data', r.x, r.y + r.h * 0.72);
+  }
+  // headline — two lines, per-line colour
+  {
+    const el = document.querySelector('h1'), cs = getComputedStyle(el), r = rel(el.getBoundingClientRect());
+    const fs = parseFloat(cs.fontSize), lh = parseFloat(cs.lineHeight);
+    setFont(cs);
+    x.fillStyle = '#eef3f1'; x.fillText('Build planetary maps for', r.x, baseOf(r.y, 0, lh, fs));
+    x.fillStyle = '#2f7cf0'; x.fillText('any world.', r.x, baseOf(r.y, 1, lh, fs));
+  }
+  // lede — wrap to the element's own width
+  {
+    const el = document.querySelector('.lede'), cs = getComputedStyle(el), r = rel(el.getBoundingClientRect());
+    const fs = parseFloat(cs.fontSize), lh = parseFloat(cs.lineHeight), maxW = r.w;
+    setFont(cs); x.fillStyle = cs.color;
+    const ws = 'Open, self-hostable. Earth, the Moon, Mars — and every world after.'.split(' ');
+    const lines = []; let a = '';
+    for (const w of ws) { const t = a ? a + ' ' + w : w; if (x.measureText(t).width > maxW && a) { lines.push(a); a = w; } else a = t; }
+    lines.push(a);
+    lines.forEach((ln, i) => x.fillText(ln, r.x, baseOf(r.y, i, lh, fs)));
+  }
+  // footer — mono, coloured dots
+  {
+    const el = document.querySelector('.foot'), cs = getComputedStyle(el), r = rel(el.getBoundingClientRect());
+    setFont(cs); const fy = r.y + r.h * 0.72; let fx = r.x;
+    for (const [t, col] of [['No signup', '#2f7cf0'], ['·', '#44506a'], ['Open source', '#2f7cf0'], ['·', '#44506a'], ['Self-host it', '#2f7cf0']]) {
+      const pad = t === '·' ? 10 : 0; fx += pad; x.fillStyle = col; x.fillText(t, fx, fy); fx += x.measureText(t).width + pad;
+    }
+  }
+
+  window.__ogGlobeDrawn = globeDrawn;
+  try { window.__ogPng = cv.toDataURL('image/png'); }
+  catch (e) { window.__ogError = 'toDataURL failed (tainted canvas?): ' + e.message; }
+  window.__ogReady = true;
+</script>
+</body>
+</html>
