@@ -238,6 +238,17 @@ Tilesets map to manifest sources (`earth/bluemarble`, `earth/s2`, `earth/viirs`)
 mosaics need reprojection and are not a straight redirect. Returns 401 (no/invalid key), 403
 (origin not allowed), 404 (unknown tileset) or 429 (over the limit). `keys.json` is never served.
 
+Mint a key with the helper script (appends to `keys.json`, which is git-ignored):
+
+```
+node scripts/mint-key.mjs "<label>" "<origin1,origin2|*>" [ratePerMin]
+# e.g. node scripts/mint-key.mjs "Acme Corp" "acme.com" 120   → prints gv_pk_…
+```
+
+Self-hosting never needs a key — a key is a billing boundary on the hosted `/v1` gateway only.
+To request a hosted key from us, use the **Request an API key** button on the site (it routes
+through the contact form). See `docs/api-keys-plan.md` for the full issuance plan.
+
 ## MCP server for agents
 
 `mcp-server.mjs` is a dependency-free Model Context Protocol server (JSON-RPC 2.0 over stdio). It

@@ -96,34 +96,11 @@ const $ = (id) => document.getElementById(id);
 const logEl = $('log');
 function logCall(s) { logEl.textContent += (logEl.textContent ? '\n' : '') + s; logEl.scrollTop = logEl.scrollHeight; }
 
-// Every body here is one NASA glTF shape model plus the calibration and a few named features.
-// Longitudes are planetographic; Phobos (like Mars' moons) is measured west-positive. northAxis/lon0
-// are the mesh-to-map calibration — see README. Features are a curated, verifiable subset.
-const BODIES = {
-  ganymede: {
-    label: 'Ganymede', model: 'data/models/ganymede.glb', radiusKm: 2634,
-    note: "Jupiter's largest moon — big enough to be round, shown here on its real (slightly out-of-round) mesh.",
-    northAxis: 'y', lon0: 0, lonDir: 1,
-    // IAU gazetteer centres (planetographic, +West). Convention calibrated against Galileo Regio.
-    features: [
-      {name: 'Galileo Regio', lon: 127, lat: 45},
-      {name: 'Osiris', lon: 166.3, lat: -38},
-      {name: 'Tros', lon: 27.3, lat: 11},
-    ],
-  },
-  phobos: {
-    label: 'Phobos', model: 'data/models/phobos.glb', radiusKm: [13.0, 11.4, 9.1],
-    note: 'A ~27 km lump of a moon. Stickney crater is nearly half its width — impossible to map on a sphere.',
-    northAxis: 'y', lon0: 0, lonDir: -1,
-    features: [
-      {name: 'Stickney', lon: 49, lat: 1},
-      {name: 'Limtoc', lon: 54, lat: -11},
-      {name: 'Hall', lon: 21, lat: -80},
-      {name: 'Roche', lon: 177, lat: 53},
-      {name: "D'Arrest", lon: 179, lat: -39},
-    ],
-  },
-};
+// The irregular-body showcase: the two NASA glTF shape models (Ganymede, Phobos) with their
+// calibration and named features. This config is shared with the playground (src/poc.js) via
+// src/shapebodies.js so calibration can't drift between the two; here we pick just the two moons.
+// Longitudes are planetographic; Phobos (like Mars' moons) is west-positive. See README.
+const BODIES = {ganymede: SHAPE_BODIES.ganymede, phobos: SHAPE_BODIES.phobos};
 
 let model = null, current = null;
 

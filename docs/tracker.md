@@ -5,6 +5,44 @@ A running status log. Newest entry on top. For architecture and the ship-it guid
 
 ---
 
+## 2026-11-19 — og-image regen, API keys Phase 1, shape-config dedupe (post-v1)
+
+**Uncommitted follow-ups on top of v1 (`0fce660`), except the og-image commit noted below. Verified in-browser.**
+
+- **Social card regenerated.** `og-image.html` had been edited since `og-image.png` was last baked, so
+  the committed image was stale. Re-rendered the card in-browser (live globe + starfield composited with
+  the DOM text/logo via the page's own capture script) and saved the fresh 1200×630 PNG. Also added
+  `og-image.html` to version control as the canonical source. **Committed** (`5f6e0f7`), along with the
+  source HTML. Confirmed the `og:image` / `og:url` / `twitter:image` meta tags in `index.html` are already
+  **absolute** (`https://rendereddata.com/…`) — the old "set absolute in production" note is resolved.
+- **API keys — Phase 1 shipped** (per `docs/api-keys-plan.md`; self-host stays keyless, a key only gates
+  the hosted `/v1` gateway):
+  - **`scripts/mint-key.mjs`** — `node scripts/mint-key.mjs "<label>" "<origins|*>" [ratePerMin]` generates
+    `gv_pk_` + 16 random bytes, appends to `keys.json` (creating it with the standard note if absent), and
+    prints the key + a `curl` to try it. Validates args; tested end-to-end (minted, verified in `keys.json`,
+    restored the original two dev keys).
+  - **"Request an API key" CTA** on the Team pricing card (`index.html`) — reuses the existing contact form
+    generically via `data-cta="API key"` (no `site.js` change); verified it opens the dialog with
+    `enquiry_type = "API key"`, which leads the Web3Forms subject.
+  - **README** `/v1` section now documents minting a key (the script) and the keyless self-host boundary.
+  - **Still open (needs a decision / infra, NOT built):** Phase 2 = deploy `serve.mjs` to Railway with a
+    persistent volume for `keys.json`/`usage.json` + `api.rendereddata.com` + CORS (only needed once a paid
+    hosted tile actually launches); Phase 3 = self-serve `POST /v1/keys` + `/keys` dashboard (gating policy
+    A vs B). See `docs/api-keys-plan.md` "Open decisions".
+- **Redundant code removed — shape bodies.** The Ganymede/Phobos config (model, radii, calibration
+  `northAxis/lon0/lonDir`, named features) was duplicated byte-for-byte in `src/poc.js` (`SHAPE`) and
+  `shapes.html` (`BODIES`) — the long-standing drift risk flagged in the 2026-11-14 notes. Hoisted into
+  **`src/shapebodies.js`** (`SHAPE_BODIES`, the superset incl. the Moon sphere body + Deimos sibling +
+  demo `note` blurbs). `poc.js` now does `const SHAPE = SHAPE_BODIES`; `shapes.html` picks
+  `{ganymede, phobos}` from it. Verified in-browser: shapes.html lists both bodies and switches
+  Ganymede↔Phobos with correct features; the playground deep-link `?body=phobos` opens straight into shape
+  mode with the WebGL ShapeModel renderer — no console errors on either. (Confirmed `maps.js` re-exports the
+  same `ShapeModel` class both files instantiate.)
+
+**Other open build items (unchanged, not started this session):** `catalog.json` (formalize open-vs-hosted
+object catalog — the manifest already carries id/kind/license/commercial/hosted, so this is an extraction +
+a consumer decision); raster/image overlays on mesh bodies; mesh day/night terminator + sky labels.
+
 ## 2026-11-15 (evening) — True-scale moon systems, orbits, scientific accuracy, capture (post-v1)
 
 **Uncommitted follow-ups on top of v1 (`0fce660`, not yet pushed). All verified in-browser.**
@@ -389,5 +427,5 @@ Decision pending from user on scope/approach.
 
 ## Conventions for this file
 
-- Date-stamped sections, newest on top. Convert relative dates to absolute (today = 2026-11-14).
+- Date-stamped sections, newest on top. Convert relative dates to absolute (today = 2026-11-19).
 - `[x]`/`[ ]` checkboxes for the active workstream so the next session can resume fast.
