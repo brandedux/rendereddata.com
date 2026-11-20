@@ -191,6 +191,23 @@ function showPlayground() {
 
 // ------------------------------------------------------------ router
 const VIEWS = ['product', 'developers', 'playground'];
+// Latest SDK release zip — same target as the "Download the SDK" button in the Developers view.
+const SDK_DOWNLOAD_URL = 'https://github.com/brandedux/rendereddata.com/releases/latest/download/rendereddata-maps-sdk.zip';
+
+// The top-right nav CTA is "Open the playground" everywhere — except on the playground itself, where
+// that's redundant, so it becomes a direct "Download the SDK" link instead.
+function setNavCta(active) {
+    const cta = document.querySelector('.nav-cta');
+    if (!cta) return;
+    if (active === 'playground') {
+        cta.textContent = 'Download the SDK';
+        cta.href = SDK_DOWNLOAD_URL;
+    } else {
+        cta.textContent = 'Open the playground';
+        cta.href = '#playground';
+    }
+}
+
 function route() {
     const [view, sub] = location.hash.replace(/^#/, '').split('/');
     const active = VIEWS.includes(view) ? view : 'product';
@@ -199,6 +216,7 @@ function route() {
         $(`tab-${v}`).setAttribute('aria-selected', String(v === active));
         $(`tab-${v}`).tabIndex = v === active ? 0 : -1;
     }
+    setNavCta(active);
     if (active === 'product') startHero();
     if (active === 'developers') {
         if (byId[sub]) current = sub;
