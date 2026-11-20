@@ -28,7 +28,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // opts: allowOrigin (CORS), keysJson (GV_KEYS seed), dbPath, mailer (from mailerFromEnv, for verify
 // emails), mailFrom/mailSubject, publicUrl (base for verify links), verifyRedirect (post-verify page).
 export async function makeKeyGateway(root, opts = {}) {
-    const {allowOrigin = '', keysJson = '', dbPath = '', sender = null,
+    const {allowOrigin = '', keysJson = '', dbPath = '', sender = null, requireVerify = false,
         mailSubject = 'Verify your Rendered Data API key', publicUrl = '', verifyRedirect = '/keys'} = opts;
 
     const corsList = String(allowOrigin || '*').split(',').map((s) => s.trim()).filter(Boolean);
@@ -114,17 +114,29 @@ export async function makeKeyGateway(root, opts = {}) {
         const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
         if (!mintAllowed(ip)) return json(res, 429, {error: 'too many key requests from your network; try again later'});
         const existing = db.findByEmail(email);
-        if (existing && existing.verified) return json(res, 409, {error: 'a verified key already exists for this email — contact us to recover it'});
+        if (existing && existing.verified) return json(res, 409, {error: 'a key already exists for this email — contact us to recover it'});
         const origins = (Array.isArray(body.origins) ? body.origins : String(body.origins || '*').split(',')).map((s) => String(s).trim()).filter(Boolean);
+        const label = String(body.label || email).slice(0, 80);
         const key = 'gv_pk_' + randomBytes(16).toString('hex');
-        const token = randomBytes(20).toString('hex');
-        db.insertKey({key, email, label: String(body.label || email).slice(0, 80), origins: origins.length ? origins : ['*'],
-            rateLimitPerMin: 60, scopes: ['tiles'], verified: false, verifyToken: token, verifyExpires: Date.now() + 864e5, created: new Date().toISOString()});
-        const base = (publicUrl || `https://${req.headers.host}`).replace(/\/+$/, '');
-        await sendVerification(email, key, `${base}/v1/verify?token=${token}`);
-        console.log(`[v1] key requested for ${email} (pending verification)`);
-        json(res, 202, {status: 'pending', key, email,
-            message: 'Check your email for a verification link. Your key activates once you confirm.'});
+
+        // Email verification is OFF by default: keys activate immediately (public keys are already
+        // origin-locked + rate-limited; a honeypot + per-IP cap + one-per-email curb abuse). Set
+        // REQUIRE_VERIFY=true AND configure an email sender to gate activation behind a confirm link.
+        if (requireVerify && sender) {
+            const token = randomBytes(20).toString('hex');
+            db.insertKey({key, email, label, origins: origins.length ? origins : ['*'],
+                rateLimitPerMin: 60, scopes: ['tiles'], verified: false, verifyToken: token, verifyExpires: Date.now() + 864e5, created: new Date().toISOString()});
+            const base = (publicUrl || `https://${req.headers.host}`).replace(/\/+$/, '');
+            await sendVerification(email, key, `${base}/v1/verify?token=${token}`);
+            console.log(`[v1] key requested for ${email} (pending verification)`);
+            return json(res, 202, {status: 'pending', key, email,
+                message: 'Check your email for a verification link. Your key activates once you confirm.'});
+        }
+        db.insertKey({key, email, label, origins: origins.length ? origins : ['*'],
+            rateLimitPerMin: 60, scopes: ['tiles'], verified: true, created: new Date().toISOString()});
+        console.log(`[v1] key issued for ${email} (active)`);
+        json(res, 201, {status: 'active', key, email, label, origins: origins.length ? origins : ['*'], rateLimitPerMin: 60,
+            message: "Your key is active. Save it — it won't be shown again."});
     }
 
     function verify(req, res, url) {

@@ -54,7 +54,7 @@
 
   <h1>Get an API key</h1>
   <p class="lede">A free, public key for the hosted <code>/v1</code> planetary tiles. Self-hosting never needs
-    a key — this is only for our hosted service. Just confirm your email to activate it.</p>
+    a key — this is only for our hosted service. No account, no waiting — your key works immediately.</p>
 
   <div id="banner" class="card" hidden></div>
 
@@ -114,10 +114,13 @@
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
       out.className = 'out ok';
-      out.innerHTML = `${body.message || 'Check your email to verify.'}`
+      const pending = body.status === 'pending';
+      out.innerHTML = (pending ? body.message : `<b>Your key is active.</b> Save it now — we don't show it again.`)
         + `<div class="key"><code id="k">${body.key}</code><button type="button" class="btn btn--ghost" id="copy">Copy</button></div>`
-        + `<div class="note">Save this key now. It activates the moment you click the verification link we just`
-        + ` emailed to <b>${body.email || 'your inbox'}</b> — until then it returns 403.</div>`;
+        + `<div class="note">` + (pending
+            ? `It activates the moment you click the link we emailed to <b>${body.email || 'your inbox'}</b> — until then it returns 403.`
+            : `Use it with <code>?key=${body.key.slice(0, 10)}…</code>. Check its usage anytime below.`)
+        + `</div>`;
       $('copy').addEventListener('click', () => navigator.clipboard?.writeText(body.key));
       e.target.reset();
     } catch (err) {

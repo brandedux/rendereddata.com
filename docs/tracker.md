@@ -5,6 +5,21 @@ A running status log. Newest entry on top. For architecture and the ship-it guid
 
 ---
 
+## 2026-11-20 (later) — Keys activate instantly (email verification made optional)
+
+- **Decision (with user): drop the email-verification requirement.** After Railway's SMTP block sent us
+  through Zoho → Resend, the email step was the only hard part and not worth it for public, origin-locked,
+  rate-limited keys. `POST /v1/keys` now issues an **active** key immediately (201, no email); abuse is
+  still curbed by honeypot + per-IP cap (5/h) + one-per-email + per-minute rate limit. The whole
+  verification machinery (DB `verified` flag, `/v1/verify`, `email.mjs`/Resend/SMTP) stays in place but
+  **dormant behind `REQUIRE_VERIFY` (default false)** — flip it + set a sender to re-enable, no code change.
+  `keys.html` lede/flow updated to "works immediately"; usage lookup unchanged. Verified on Node 22:
+  mint → 201 active → key works instantly (usage 200, tile 302), zero email attempted.
+- **Next (user's plan): accounts/login later** so users can sign in for usage reports (the per-key
+  `scopes` column + usage tables are the groundwork). Not built yet; the keyed `/v1/usage` lookup on
+  `/keys` covers reports for now.
+- **Railway cleanup:** the `SMTP_*` and `RESEND_API_KEY`/`MAIL_FROM` vars are now optional — can be removed.
+
 ## 2026-11-20 (later) — Verification email via Resend (Railway blocks SMTP)
 
 - **Diagnosed the stuck verification emails by reading the live Railway logs** (via browser): the key

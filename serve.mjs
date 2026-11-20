@@ -31,8 +31,9 @@ const mailer = mailerFromEnv({...process.env, CONTACT_TO});   // null until SMTP
 // Verification emails go out via Resend (RESEND_API_KEY) on hosts that block SMTP, else SMTP, else logged.
 const sender = makeSender(process.env);
 const gateway = await makeKeyGateway(root, {
-    allowOrigin: process.env.ALLOW_ORIGIN, keysJson: process.env.GV_KEYS, dbPath,
-    sender, publicUrl: process.env.PUBLIC_API_URL, verifyRedirect: process.env.VERIFY_REDIRECT || '/keys',
+    allowOrigin: process.env.ALLOW_ORIGIN, keysJson: process.env.GV_KEYS, dbPath, sender,
+    requireVerify: process.env.REQUIRE_VERIFY === 'true',   // off by default → keys activate immediately
+    publicUrl: process.env.PUBLIC_API_URL, verifyRedirect: process.env.VERIFY_REDIRECT || '/keys',
 });   // /v1 metered tiles + usage + self-serve keys
 console.log(`[v1] email transport: ${sender ? sender.kind : 'none (links logged)'}`);
 // Startup diagnostic (shows in the host's logs): how many /v1 keys loaded, and whether GV_KEYS was seen.
