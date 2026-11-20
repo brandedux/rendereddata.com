@@ -41,16 +41,11 @@ SDK's import graph and runtime assets, laid out so `import {GlobeMap} from './sr
 any static host — no build step, no install, no key. It includes a `README.md` and a ready-to-run
 `example.html`. Serve the folder (`npx serve .`) and open `example.html`.
 
-The site's **Download the SDK** button serves this zip from the repo's latest GitHub release. To cut
-a release after a change:
-
-```
-node build-sdk.mjs
-gh release create v$(node -p "require('./package.json').version") \
-  dist/rendereddata-maps-sdk.zip --title "SDK v$(node -p "require('./package.json').version")"
-```
-
-The download link (`releases/latest/download/rendereddata-maps-sdk.zip`) is stable across releases.
+The site's **Download the SDK** button serves this zip from the site root at
+`/rendereddata-maps-sdk.zip` (a relative link). The GitHub Pages deploy builds it on every push
+(`.github/workflows/pages.yml` runs `build-sdk.mjs` and drops the zip at the root), so the download is
+always current — no GitHub Release to cut. Build it locally the same way with `node build-sdk.mjs`
+(output in `dist/`; the root copy is git-ignored).
 
 The bundle is **portable to any sub-path** (e.g. a CDN at `https://cdn.example.com/rdm/`): every
 bundled asset resolves relative to the module URL, not the page. Keep `manifest.json`, `data/`,

@@ -24,9 +24,9 @@ const pkg = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
 const VERSION = pkg.version || '0.0.0';
 const NAME = 'rendereddata-maps-sdk';
 const OUT = join(ROOT, 'dist', NAME);
-// Stable, un-versioned zip name so the download link is a fixed URL:
-//   https://github.com/<owner>/<repo>/releases/latest/download/rendereddata-maps-sdk.zip
-// (the version lives in the bundle's own README.md and in package.json).
+// Stable, un-versioned zip name so the download link is a fixed URL: the Pages deploy copies this to the
+// site root and the button links to it relatively as /rendereddata-maps-sdk.zip. (The version lives in
+// the bundle's own README.md and in package.json.)
 const ZIP = join(ROOT, 'dist', `${NAME}.zip`);
 
 // The import graph + runtime loads, from the packaging audit. REQUIRED = the core path (an Earth globe
