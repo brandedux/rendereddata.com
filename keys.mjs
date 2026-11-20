@@ -20,7 +20,26 @@ const TILESETS = {
 const json = (res, code, body) => { res.writeHead(code, {'content-type': 'application/json', 'cache-control': 'no-store'}); res.end(JSON.stringify(body, null, 2)); };
 const twoDaysAgo = () => new Date(Date.now() - 2 * 864e5).toISOString().slice(0, 10);
 
-export async function makeKeyGateway(root) {
+// opts.allowOrigin — CORS policy for the browser SDK (ALLOW_ORIGIN env, passed in by serve.mjs).
+// Unset or '*' allows any caller; a comma-separated list reflects the request Origin when it matches,
+// so several site origins can share one gateway. The key + origin allow-list + rate limit are the real
+// access controls; CORS just lets the browser read cross-origin responses (e.g. GET /v1/usage via fetch).
+export async function makeKeyGateway(root, {allowOrigin = ''} = {}) {
+    const corsList = String(allowOrigin || '*').split(',').map((s) => s.trim()).filter(Boolean);
+    const corsAny = corsList.includes('*');
+    // Set CORS headers for this request via setHeader(), so they survive the later writeHead()
+    // (which only sets content-type/cache-control/Location). Returns the resolved Allow-Origin, or ''.
+    const setCors = (req, res) => {
+        const origin = corsAny ? '*' : (req.headers.origin && corsList.includes(req.headers.origin) ? req.headers.origin : '');
+        if (!origin) return '';
+        res.setHeader('access-control-allow-origin', origin);
+        if (origin !== '*') res.setHeader('vary', 'Origin');
+        res.setHeader('access-control-allow-methods', 'GET, OPTIONS');
+        res.setHeader('access-control-allow-headers', 'Authorization, Content-Type');
+        res.setHeader('access-control-max-age', '86400');
+        return origin;
+    };
+
     let keys = {}, manifest = {};
     try {
         const cfg = JSON.parse(await readFile(join(root, 'keys.json'), 'utf8'));
@@ -79,6 +98,9 @@ export async function makeKeyGateway(root) {
     }
 
     function handle(req, res, url) {
+        setCors(req, res);   // applies to every /v1 response below (JSON, the 302, and errors)
+        // CORS preflight: browsers send OPTIONS before a cross-origin fetch with non-simple headers.
+        if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return true; }
         const parts = url.pathname.split('/').filter(Boolean);   // ['v1', ...]
         if (parts[1] === 'usage') {
             const auth = authorize(req, res, url);

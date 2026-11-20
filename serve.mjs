@@ -19,7 +19,9 @@ const usageFile = join(root, 'usage.json');
 const CONTACT_TO = process.env.CONTACT_TO || 'hello@sorcery.llc';
 const CONTACT_SUBJECT = process.env.CONTACT_SUBJECT || 'Rendered Data Contact Form';
 const mailer = mailerFromEnv({...process.env, CONTACT_TO});   // null until SMTP_HOST (+ creds) are set
-const gateway = await makeKeyGateway(root);   // /v1 metered tiles + usage
+// ALLOW_ORIGIN (unset/'*' = any; else a comma-separated allow-list) sets CORS so the browser SDK can
+// call /v1 cross-origin, e.g. from rendereddata.com against api.rendereddata.com.
+const gateway = await makeKeyGateway(root, {allowOrigin: process.env.ALLOW_ORIGIN});   // /v1 metered tiles + usage
 const types = {
     '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
     '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.geojson': 'application/geo+json',

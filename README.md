@@ -249,6 +249,11 @@ Self-hosting never needs a key — a key is a billing boundary on the hosted `/v
 To request a hosted key from us, use the **Request an API key** button on the site (it routes
 through the contact form). See `docs/api-keys-plan.md` for the full issuance plan.
 
+Cross-origin: set `ALLOW_ORIGIN` to let the browser SDK call `/v1` from another origin (e.g.
+`rendereddata.com` → `api.rendereddata.com`). Unset or `*` allows any caller; a comma-separated
+list reflects the request `Origin` when it matches (with `Vary: Origin`). Preflight `OPTIONS` is
+answered 204. The key + origin allow-list + rate limit remain the real access controls.
+
 ## MCP server for agents
 
 `mcp-server.mjs` is a dependency-free Model Context Protocol server (JSON-RPC 2.0 over stdio). It

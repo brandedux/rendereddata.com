@@ -5,7 +5,7 @@ A running status log. Newest entry on top. For architecture and the ship-it guid
 
 ---
 
-## 2026-11-19 — og-image regen, API keys Phase 1, shape-config dedupe (post-v1)
+## 2026-11-19 — og-image regen, API keys Phase 1 + /v1 CORS, shape-config dedupe, header CTA (post-v1)
 
 **Uncommitted follow-ups on top of v1 (`0fce660`), except the og-image commit noted below. Verified in-browser.**
 
@@ -25,10 +25,24 @@ A running status log. Newest entry on top. For architecture and the ship-it guid
     generically via `data-cta="API key"` (no `site.js` change); verified it opens the dialog with
     `enquiry_type = "API key"`, which leads the Web3Forms subject.
   - **README** `/v1` section now documents minting a key (the script) and the keyless self-host boundary.
+  - **`/v1` CORS — built.** `keys.mjs` now sets CORS headers on every `/v1` response (incl. the tile 302
+    and error codes) and answers preflight `OPTIONS` with 204, driven by a new `ALLOW_ORIGIN` env threaded
+    through `makeKeyGateway(root, {allowOrigin})` from `serve.mjs`. Unset/`*` = any caller; a comma-separated
+    list reflects the matching request `Origin` with `Vary: Origin`; disallowed origins get no header.
+    Verified with curl in both modes (`*` and a locked allow-list): GET, preflight, and the GIBS redirect
+    all carry the right headers. README + `local.env` notes updated (local.env is git-ignored).
   - **Still open (needs a decision / infra, NOT built):** Phase 2 = deploy `serve.mjs` to Railway with a
-    persistent volume for `keys.json`/`usage.json` + `api.rendereddata.com` + CORS (only needed once a paid
-    hosted tile actually launches); Phase 3 = self-serve `POST /v1/keys` + `/keys` dashboard (gating policy
-    A vs B). See `docs/api-keys-plan.md` "Open decisions".
+    persistent volume for `keys.json`/`usage.json` + `api.rendereddata.com` (user is setting up the Railway
+    project; `local.env` + the PORT-from-argv and keys-on-volume gotchas are documented); Phase 3 =
+    self-serve `POST /v1/keys` + `/keys` dashboard (gating policy A vs B). See `docs/api-keys-plan.md`.
+- **Header CTA is context-aware.** The top-right nav button read "Open the playground" on every view,
+  redundant on the playground itself. The SPA router (`src/site.js` `route()` → new `setNavCta()`) now
+  swaps it to a direct **"Download the SDK"** link (latest release zip) when the playground view is active,
+  reverting elsewhere. Verified in-browser across all route transitions; no console errors.
+- **`local.env`** (git-ignored) added for the Railway/self-host deploy: the two public `gv_pk_` keys for
+  reference, `PORT`, `ALLOW_ORIGIN`, and the optional `CONTACT_*`/`SMTP_*` vars, with the deploy gotchas
+  inline (keys load from `keys.json` on a volume; `PORT` comes from argv → start command `node serve.mjs
+  $PORT`). `.gitignore` gained a `local.env` rule since the existing `.env*` rules didn't match the name.
 - **Redundant code removed — shape bodies.** The Ganymede/Phobos config (model, radii, calibration
   `northAxis/lon0/lonDir`, named features) was duplicated byte-for-byte in `src/poc.js` (`SHAPE`) and
   `shapes.html` (`BODIES`) — the long-standing drift risk flagged in the 2026-11-14 notes. Hoisted into
