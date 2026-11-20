@@ -9,7 +9,8 @@ import {sendMail, mailerFromEnv} from './mailer.mjs';
 import {makeKeyGateway} from './keys.mjs';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
-const port = Number(process.argv[2]) || 8787;
+// Port: CLI arg first (local `node serve.mjs 8787`), then $PORT (Railway/containers inject it), else 8787.
+const port = Number(process.argv[2] || process.env.PORT) || 8787;
 const leadsDir = join(root, 'leads');
 const leadsFile = join(leadsDir, 'enterprise.jsonl');
 const keysFile = join(root, 'keys.json');
@@ -121,4 +122,5 @@ createServer(async (req, res) => {
         res.writeHead(code, {'content-type': 'text/plain'});
         res.end({403: 'forbidden', 405: 'method not allowed', 413: 'payload too large'}[code] || 'not found');
     }
-}).listen(port, '127.0.0.1', () => console.log(`Rendered Data Maps POC: http://localhost:${port}/`));
+// Bind 0.0.0.0 so a container host (Railway, etc.) can reach it through its proxy; still localhost-reachable.
+}).listen(port, '0.0.0.0', () => console.log(`Rendered Data Maps POC: http://localhost:${port}/`));

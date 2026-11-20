@@ -41,8 +41,9 @@ A running status log. Newest entry on top. For architecture and the ship-it guid
   reverting elsewhere. Verified in-browser across all route transitions; no console errors.
 - **`local.env`** (git-ignored) added for the Railway/self-host deploy: the two public `gv_pk_` keys for
   reference, `PORT`, `ALLOW_ORIGIN`, and the optional `CONTACT_*`/`SMTP_*` vars, with the deploy gotchas
-  inline (keys load from `keys.json` on a volume; `PORT` comes from argv → start command `node serve.mjs
-  $PORT`). `.gitignore` gained a `local.env` rule since the existing `.env*` rules didn't match the name.
+  inline (keys load from `keys.json` on a volume). `.gitignore` gained a `local.env` rule since the
+  existing `.env*` rules didn't match the name. (Later: `serve.mjs` now binds `0.0.0.0` and reads `$PORT`,
+  so Railway's default `npm start` works with no custom start command — see the deploy note below.)
 - **`catalog.json` — built.** The license-clear object catalog the monetization notes called for.
   **`scripts/build-catalog.mjs`** generates it from `manifest.json` + the bundled NASA shape models
   (Ganymede/Phobos/Deimos, which stay out of the manifest to avoid ~8 MB of probe loads) — 17 objects,
@@ -98,6 +99,14 @@ A running status log. Newest entry on top. For architecture and the ship-it guid
     mesh (renamed from "Star labels"; also still drives the globe's star labels). Verified on Phobos: 11
     labels built (Sun, 5 planets, 5 constellations), correctly projected/colored and occlusion-culled, no
     console errors.
+
+- **Railway deploy fix.** `serve.mjs` bound `127.0.0.1` and took the port only from argv — both would make
+  it unreachable on a container host. Changed to bind `0.0.0.0` and read `process.argv[2] || process.env.PORT`
+  (CLI arg still wins locally). Verified: `PORT=8799 node serve.mjs` serves static + `/v1`. **Deploy shape:**
+  the repo is built for a split — static site on **GitHub Pages** at `rendereddata.com` (CNAME + `.github/
+  workflows/pages.yml`), and the Node `/v1` gateway on **Railway** at `api.rendereddata.com` (a subdomain
+  CNAME'd to the Railway service, not a folder). Keep Railway OFF `www` (it collides with Pages). Set
+  `ALLOW_ORIGIN=https://rendereddata.com` on Railway for CORS; mount a volume for `keys.json`/`usage.json`.
 
 **Other open build items (not started this session):** API keys Phase 3 self-serve (`POST /v1/keys` +
 `/keys` dashboard, gating policy A vs B); Ganymede feature pins not eye-verified to sub-degree; production
