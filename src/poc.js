@@ -618,8 +618,8 @@ function renderShapeControls() {
     // Day/night terminator: light the model from the real Sun (true phase) instead of the headlight.
     const term = el('input', {type: 'checkbox', id: 'l-term-shape', checked: state.shapeTerminator});
     term.addEventListener('change', () => { state.shapeTerminator = term.checked; shapeModel?.setTerminator(term.checked); });
-    // Bring your own data: drape GeoJSON/KML/GPX onto the real mesh surface.
-    const file = el('input', {type: 'file', id: 'shape-byo', accept: '.geojson,.json,.kml,.gpx'});
+    // Bring your own data: drape GeoJSON/KML/GPX vectors or an equirectangular image onto the real surface.
+    const file = el('input', {type: 'file', id: 'shape-byo', accept: '.geojson,.json,.kml,.gpx,.png,.jpg,.jpeg,.webp'});
     file.addEventListener('change', async (e) => {
         const f = e.target.files[0];
         if (f) { try { await shapeModel?.addUserLayer(f); } catch (err) { $('cam').textContent = `Could not read ${f.name}:\n${err.message}`; } }
@@ -628,13 +628,16 @@ function renderShapeControls() {
     const sample = el('button', {textContent: 'Drape sample data'});
     sample.addEventListener('click', () => shapeModel?.addUserLayer(sampleGeoJSON(), {fit: false}));
     const clearBtn = el('button', {textContent: 'Clear'});
-    clearBtn.addEventListener('click', () => { for (const l of shapeModel?.userLayers() || []) shapeModel.removeUserLayer(l.id); });
+    clearBtn.addEventListener('click', () => {
+        for (const l of shapeModel?.userLayers() || []) shapeModel.removeUserLayer(l.id);
+        for (const w of shapeModel?.userWorlds() || []) shapeModel.removeUserWorld(w.id);
+    });
     $('overlays').replaceChildren(
         el('div', {className: 'row'}, grat, el('label', {htmlFor: 'l-grat'}, 'Lon/lat graticule')),
         labelsToggle(),
         spinToggle(),
         el('div', {className: 'row'}, term, el('label', {htmlFor: 'l-term-shape'}, 'Day / night terminator')),
-        el('div', {className: 'note', style: 'margin-top:8px'}, 'Your data: drape GeoJSON / KML / GPX on the real surface. Read in the browser, nothing uploaded.'),
+        el('div', {className: 'note', style: 'margin-top:8px'}, 'Your data: drape GeoJSON / KML / GPX, or an equirectangular image, on the real surface. Read in the browser, nothing uploaded.'),
         el('div', {className: 'row'}, file),
         el('div', {className: 'seg', style: 'margin-top:6px'}, sample, clearBtn),
         el('div', {className: 'note', textContent: `${cfg.label}: ${shapeDims(cfg)}. A separate WebGL canvas, not the MapLibre globe; the base, overlay and projection controls above are globe-only (the sky and your-own-data work here too).`})

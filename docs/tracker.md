@@ -5,7 +5,7 @@ A running status log. Newest entry on top. For architecture and the ship-it guid
 
 ---
 
-## 2026-11-19 — og-image regen, API keys Phase 1 + /v1 CORS, shape-config dedupe, header CTA (post-v1)
+## 2026-11-19 — og-image, API keys Phase 1 + /v1 CORS + catalog, SDK hosted tiles, mesh raster overlays, dedupe, header CTA (post-v1)
 
 **Uncommitted follow-ups on top of v1 (`0fce660`), except the og-image commit noted below. Verified in-browser.**
 
@@ -72,9 +72,21 @@ A running status log. Newest entry on top. For architecture and the ship-it guid
   redirect) and the usage counter metered them. README documents the option. **Pending:** production
   smoke-test against the live Railway gateway (needs the deployed base URL + a key on the volume).
 
-**Other open build items (not started this session):** raster/image overlays on mesh bodies; mesh
-day/night terminator + sky labels; API keys Phase 3 self-serve (`POST /v1/keys` + `/keys` dashboard,
-gating policy A vs B); Ganymede feature pins not eye-verified to sub-degree. (`catalog.json` — done above.)
+- **Raster/image overlays on mesh bodies — built & verified.** The last "drape your own data on any
+  surface" gap: `ShapeModel` gained `addUserWorld(image, {id, opacity})` + `setUserWorldOpacity` /
+  `removeUserWorld` / `userWorlds()`, mirroring `GlobeMap.addUserWorld`. It drapes an equirectangular
+  image onto the real mesh via a lon/lat lattice draped through `_surfacePoint` (new flat textured shader
+  with `u_opacity`, lifted 1.006 above the surface, blended, depth-tested so the far side is occluded).
+  The image is sampled by the body's planetographic lon/lat, so pixels align with feature pins (west-
+  positive bodies flip E/W, as expected). Mesh `addUserLayer` now auto-routes image inputs here (unified
+  with the globe). Playground "Your data" picker accepts images and Clear removes worlds. **Verified in-
+  browser on Phobos**: a generated equirect grid with a marker at lon 49 draped aligned under the Stickney
+  pin, hugging the lumpy mesh, no console errors. README documents it.
+
+**Other open build items (not started this session):** mesh day/night terminator + sky labels; API keys
+Phase 3 self-serve (`POST /v1/keys` + `/keys` dashboard, gating policy A vs B); Ganymede feature pins not
+eye-verified to sub-degree; production smoke-test of hosted tiles against the live Railway gateway (needs
+the deployed base URL + a key).
 
 ## 2026-11-15 (evening) — True-scale moon systems, orbits, scientific accuracy, capture (post-v1)
 

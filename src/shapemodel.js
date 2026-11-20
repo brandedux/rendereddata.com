@@ -112,6 +112,7 @@ export class ShapeModel extends Emitter {
         this._parentTime = null;       // epoch used to light the parent (tracks the sky clock when set)
         this._userLayers = new Map();  // id -> draped GeoJSON layer, created by addUserLayer()
         this._userSeq = 0;
+        this._worlds = new Map();      // id -> draped equirectangular image overlay, created by addUserWorld()
         this._selfOrbit = {aKm: opts.orbitKm || 1, periodH: opts.orbitHours || 1};   // this moon's orbit around its primary
         this._siblingCfg = opts.siblings || [];   // sibling moons to draw in the sky (e.g. Deimos behind Phobos)
         this._siblings = [];                       // loaded sibling meshes (populated async after boot)
@@ -198,6 +199,10 @@ export class ShapeModel extends Emitter {
         // Line program: the graticule and feature stems, flat colour.
         this.progLine = makeProgram(gl, VERT_LINE, FRAG_LINE);
         this.locL = attribsUniforms(gl, this.progLine, ['a_pos'], ['u_mvp', 'u_color']);
+
+        // World-overlay program: user-supplied equirectangular images draped on the real surface.
+        this.progWorld = makeProgram(gl, VERT_WORLD, FRAG_WORLD);
+        this.locW = attribsUniforms(gl, this.progWorld, ['a_pos', 'a_uv'], ['u_mvp', 'u_tex', 'u_opacity']);
 
         // Star program: coloured, sized point sprites with a soft round falloff (for the sky).
         this.progStar = makeProgram(gl, VERT_STAR, FRAG_STAR);
@@ -460,6 +465,26 @@ export class ShapeModel extends Emitter {
         bindAttrib(gl, this.bufUv, this.locS.a_uv, 2);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.bufIdx);
         gl.drawElements(gl.TRIANGLES, this.idxCount, gl.UNSIGNED_SHORT, 0);
+
+        // user-supplied equirectangular overlays, draped on the real surface just above it. Blended and
+        // depth-tested against the opaque base (so the far side is occluded) but not depth-writing, so the
+        // graticule and feature pins still read on top.
+        if (this._worlds.size) {
+            const lat = this._worldLattice;
+            gl.useProgram(this.progWorld);
+            gl.uniformMatrix4fv(this.locW.u_mvp, false, bodyMvp);
+            gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+            bindAttrib(gl, lat.pos, this.locW.a_pos, 3);
+            bindAttrib(gl, lat.uv, this.locW.a_uv, 2);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, lat.idx);
+            gl.activeTexture(gl.TEXTURE0); gl.uniform1i(this.locW.u_tex, 0);
+            for (const w of this._worlds.values()) {
+                gl.bindTexture(gl.TEXTURE_2D, w.tex);
+                gl.uniform1f(this.locW.u_opacity, w.opacity);
+                gl.drawElements(gl.TRIANGLES, lat.n, gl.UNSIGNED_SHORT, 0);
+            }
+            gl.disable(gl.BLEND); gl.depthMask(true);
+        }
 
         // graticule + feature stems (depth-tested so the far side is hidden by the body)
         gl.useProgram(this.progLine);
@@ -855,9 +880,13 @@ export class ShapeModel extends Emitter {
      * are read in this body's planetographic lon/lat.
      * @returns {Promise<{id, kind, license}>}
      */
-    async addUserLayer(input, {id, fit = true, color} = {}) {
+    async addUserLayer(input, {id, fit = true, color, opacity} = {}) {
         await this.ready;
         const key = id || `user-${++this._userSeq}`;
+        // Raster: an image URL or an image File/Blob drapes as an equirectangular overlay (addUserWorld),
+        // mirroring GlobeMap.addUserLayer. Everything else is read as vector (GeoJSON/KML/GPX) below.
+        if (typeof input === 'string' && /\.(png|jpe?g|webp)(\?|#|$)/i.test(input.trim())) return this.addUserWorld(input, {id: key, opacity});
+        if (input && (input.type && input.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(input.name || ''))) return this.addUserWorld(input, {id: key, opacity});
         let data;
         if (typeof input === 'string') {
             const res = await fetch(input.trim(), {cache: 'no-store'});
@@ -877,6 +906,7 @@ export class ShapeModel extends Emitter {
         return desc;
     }
     removeUserLayer(id) {
+        if (this._worlds.has(id)) return this.removeUserWorld(id);   // image layers added via addUserLayer
         const L = this._userLayers.get(id);
         if (!L) return false;
         for (const b of [L.fillBuf, L.lineBuf, L.ptPos, L.ptCol, L.ptSize]) if (b) this.gl.deleteBuffer(b);
@@ -884,6 +914,68 @@ export class ShapeModel extends Emitter {
         return true;
     }
     userLayers() { return [...this._userLayers.keys()].map((id) => ({id})); }
+
+    /**
+     * Drape a user-supplied equirectangular image over the real mesh surface — the raster equivalent of
+     * addUserLayer, and the mesh equivalent of GlobeMap.addUserWorld. Nothing is uploaded: the image is
+     * decoded in the browser and sampled by this body's planetographic lon/lat, so a pixel at (lon, lat)
+     * lands on the same surface point as a feature there. The image's horizontal axis is longitude
+     * (left edge −180°, right edge +180° in this body's system), vertical is latitude (+90° at the top).
+     * Accepts a File/Blob, an image URL, or an ImageBitmap/canvas/<img>.
+     * @param {object} [opts]
+     * @param {string} [opts.id='user-world']  layer id (re-adding the same id replaces it)
+     * @param {number} [opts.opacity=1]        0..1 blend over the base imagery
+     * @returns {Promise<{id, kind, width, height}>}
+     */
+    async addUserWorld(input, {id = 'user-world', opacity = 1} = {}) {
+        await this.ready;
+        const bitmap = await loadImageBitmap(input);
+        if (this._worlds.has(id)) this.removeUserWorld(id);
+        const gl = this.gl, tex = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);          // wrap longitude at the ±180° seam
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        this._ensureWorldLattice();
+        const desc = {id, kind: 'world', tex, opacity: clamp01(opacity), width: bitmap.width || 0, height: bitmap.height || 0};
+        this._worlds.set(id, desc);
+        this.emit('userworld', {id, kind: 'world', width: desc.width, height: desc.height});
+        return {id, kind: 'world', width: desc.width, height: desc.height};
+    }
+    setUserWorldOpacity(id, opacity) { const w = this._worlds.get(id); if (w) w.opacity = clamp01(opacity); return this; }
+    removeUserWorld(id = 'user-world') {
+        const w = this._worlds.get(id);
+        if (!w) return false;
+        this.gl.deleteTexture(w.tex);
+        this._worlds.delete(id);
+        return true;
+    }
+    userWorlds() { return [...this._worlds.values()].map((w) => ({id: w.id, kind: w.kind, width: w.width, height: w.height})); }
+
+    // A lon/lat lattice (shared by all overlays) draped onto the real surface via _surfacePoint, lifted
+    // just above it so the opaque base occludes the far side. Built lazily, torn down with the model.
+    _ensureWorldLattice() {
+        if (this._worldLattice) return;
+        const gh = 60, gw = 120, lift = 1.006, pos = [], uv = [], idx = [];
+        for (let i = 0; i <= gh; i++) {
+            const lat = 90 - 180 * i / gh;
+            for (let j = 0; j <= gw; j++) {
+                const lon = -180 + 360 * j / gw;
+                pos.push(...this._surfacePoint(lon, lat, lift));
+                uv.push(j / gw, i / gh);
+            }
+        }
+        const W = gw + 1;
+        for (let i = 0; i < gh; i++) for (let j = 0; j < gw; j++) {
+            const a = i * W + j, b = a + 1, c = a + W, d = c + 1;
+            idx.push(a, c, b, b, c, d);
+        }
+        this._worldLattice = {pos: buffer(this.gl, new Float32Array(pos)), uv: buffer(this.gl, new Float32Array(uv)),
+            idx: indexBuffer(this.gl, new Uint16Array(idx)), n: idx.length};
+    }
 
     _buildUserLayer(key, geojson, color) {
         const gl = this.gl, linePos = [], ptPos = [], fillPos = [];
@@ -1031,6 +1123,20 @@ export default ShapeModel;
 
 const ROOT = new URL('..', import.meta.url).href;
 const abs = (u) => (/^https?:/.test(u) ? u : ROOT + u.replace(/^\.?\//, ''));
+const clamp01 = (v) => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 1));
+
+// Normalise an addUserWorld input to something texImage2D accepts (ImageBitmap / <img> / canvas).
+// Mirrors GlobeMap.addUserWorld: a File/Blob, an image URL, or an already-decoded image/canvas.
+async function loadImageBitmap(input) {
+    if (typeof input === 'string') {
+        const res = await fetch(abs(input.trim()), {cache: 'no-store'});
+        if (!res.ok) throw new Error(`Could not fetch world image: HTTP ${res.status}`);
+        return await createImageBitmap(await res.blob());
+    }
+    if (input instanceof Blob || (input && typeof input.arrayBuffer === 'function')) return await createImageBitmap(input);
+    if (input && input.width != null && (input instanceof ImageBitmap || typeof input.getContext === 'function' || input.tagName === 'IMG')) return input;
+    throw new Error('addUserWorld expects an equirectangular image: a File/Blob, an image URL, or an ImageBitmap/canvas/img');
+}
 const SPACE_BG = 'radial-gradient(ellipse at 50% 42%, #10151f 0%, #090d15 45%, #03050b 74%, #000 100%)';
 // The primary each supported moon orbits, drawn looming in its sky. angDiam is the primary's true
 // apparent diameter from the moon (deg): Mars fills ~42° of Phobos's sky — wider than the camera's
@@ -1254,6 +1360,17 @@ void main() {
   lit += base * u_planetShine * max(dot(n, u_planetDir) * 0.6 + 0.4, 0.0);
   gl_FragColor = vec4(lit, 1.0);
 }`;
+// World-overlay: a user-supplied equirectangular image draped on the surface, flat (unlit, like a map
+// layer) with per-layer opacity. The image's own alpha is honoured, so partial-coverage PNGs blend.
+const VERT_WORLD = `
+attribute vec3 a_pos; attribute vec2 a_uv;
+uniform mat4 u_mvp; varying vec2 v_uv;
+void main() { v_uv = a_uv; gl_Position = u_mvp * vec4(a_pos, 1.0); }`;
+const FRAG_WORLD = `
+precision highp float;
+uniform sampler2D u_tex; uniform float u_opacity;
+varying vec2 v_uv;
+void main() { vec4 c = texture2D(u_tex, v_uv); gl_FragColor = vec4(c.rgb, c.a * u_opacity); }`;
 const VERT_LINE = `
 attribute vec3 a_pos; uniform mat4 u_mvp;
 void main() { gl_Position = u_mvp * vec4(a_pos, 1.0); }`;

@@ -185,7 +185,17 @@ const model = new ShapeModel({
 await model.ready;                   // .glb fetched, parsed, meshed, drawn
 model.on('select', (f) => console.log(f.name, f.lon, f.lat));
 model.flyTo({lon: 49, lat: 1});      // swing the camera round to the giant crater
+
+// Drape your own data on the real surface — vectors or raster, nothing uploaded:
+await model.addUserLayer(geojsonFileOrUrl);                 // GeoJSON / KML / GPX, projected onto the mesh
+await model.addUserWorld(equirectImage, {opacity: 0.7});   // an equirectangular image, sampled by lon/lat
 ```
+
+`addUserWorld` drapes an equirectangular image onto the mesh (the raster counterpart of `addUserLayer`,
+and the mesh counterpart of `GlobeMap.addUserWorld`). Its horizontal axis is this body's planetographic
+longitude and vertical is latitude, so a pixel at (lon, lat) lands on the same point as a feature there
+— on a west-positive body like Phobos that means east/west runs opposite a standard east-positive map.
+`addUserLayer` also accepts image files/URLs and routes them here automatically.
 
 The graticule and feature pins are derived from the mesh **geometry** (a direction→radius grid), not
 the texture, so they hug the real lumpy surface and work even though Phobos's texture is a custom atlas
