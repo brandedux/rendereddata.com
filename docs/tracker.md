@@ -5,6 +5,24 @@ A running status log. Newest entry on top. For architecture and the ship-it guid
 
 ---
 
+## 2026-11-20 (later) — Datastore-driven rotation; Jupiter spin corrected (post-v1)
+
+- **Jupiter was spinning far too fast** in the "rotate on axis" demo (~14 s/rotation). Root cause wasn't the
+  data — `data/rotation.json` and `celestial.js` both had Jupiter's true 9h55m period — but the demo-rate
+  mapping (`demoSpinRate`, clamp `[2,30]°/s`, ×0.03) put Jupiter near the cap (~26°/s). Retuned to ×0.0115,
+  clamp `[0.5,14]°/s`: Jupiter now ~10°/s → **36 s/rotation**, still proportional to reality so the true
+  ratios hold (Jupiter ~17× Ganymede, Phobos ~3.2× Mars). Verified in-browser (parent spinRate reads 10.0°/s,
+  Ganymede axis 0.58°/s).
+- **Rotation is now datastore-driven for all objects.** The SDK fetches `data/rotation.json` and drives every
+  spin from it — the moon's own axis, each parent planet behind its moon, and sibling moons (`ShapeModel`
+  via a shared `loadRotation()` + `rotDegPerDay()`), and the playground globe (`poc.js` now loads the store
+  into `ROT_DEG_PER_DAY` instead of a hardcoded table, and applies spin *sense* so retrograde bodies would
+  turn the right way). Falls back to the `Cel.iauElements` IAU rate if the store can't be read. The globe and
+  mesh share one rate function (×0.0115, `[0.5,14]`), so Earth spins at ~4°/s matching the hero.
+- **Datastore completed for all bodies.** Added **Deimos** (tidally locked, 30.3 h) and the remaining planets
+  **Mercury, Venus (retrograde), Saturn** to `data/rotation.json` with sidereal periods, sense, IAU poles and
+  obliquity — 10 bodies total, the single source of truth for rotation.
+
 ## 2026-11-19 — og-image, API keys Phase 1 + /v1 CORS + catalog, SDK hosted tiles, mesh raster overlays + soft terminator + sky labels, dedupe, header CTA (post-v1)
 
 **Uncommitted follow-ups on top of v1 (`0fce660`), except the og-image commit noted below. Verified in-browser.**

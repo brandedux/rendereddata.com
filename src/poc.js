@@ -210,8 +210,20 @@ function labelsToggle() {
 // model about its pole); on a globe it animates the body's rotation below. Real IAU rotation rates (deg
 // per day, prograde) set the direction + relative speed, scaled for visibility and clamped so slow
 // rotators (the Moon) still turn perceptibly. One formula for both renderers, so they behave alike.
-const ROT_DEG_PER_DAY = {earth: 360.99, moon: 13.18, mars: 350.89};
-const demoSpinDegPerSec = (degPerDay) => Math.min(30, Math.max(2, Math.abs(degPerDay) * 0.03));
+// Rotation rates (deg/day, signed for spin sense) per body — loaded from the datastore (data/rotation.json)
+// so the playground globe, the mesh renderer and the hero all turn each world at the same true-relative
+// rate. Seeded with a fallback so the globe spins before the fetch resolves.
+let ROT_DEG_PER_DAY = {earth: 360.99, moon: 13.18, mars: 350.89};
+fetch(ROOT + 'data/rotation.json', {cache: 'force-cache'}).then((r) => (r.ok ? r.json() : null)).then((rot) => {
+    if (!rot || !rot.bodies) return;
+    const next = {};
+    for (const [name, b] of Object.entries(rot.bodies)) if (typeof b.deg_per_day === 'number')
+        next[name] = b.deg_per_day * (b.sense === 'retrograde' ? -1 : 1);
+    ROT_DEG_PER_DAY = next;
+}).catch(() => {});
+// Believable on-screen spin rate (deg/s): proportional to reality, clamped so the slowest body still
+// creeps and the fastest doesn't blur. Matches ShapeModel's demoSpinRate (×0.0115, clamped [0.5, 14]).
+const demoSpinDegPerSec = (degPerDay) => Math.min(14, Math.max(0.5, Math.abs(degPerDay) * 0.0115));
 function spinToggle() {
     const cb = el('input', {type: 'checkbox', id: 'l-spin', checked: state.spin});
     cb.addEventListener('change', () => setSpin(cb.checked));
@@ -229,7 +241,9 @@ function spinTick(now) {
     if (state.spin && !_spinPaused && !isShape(state.body) && map.isStyleLoaded() && ROT_DEG_PER_DAY[state.body]) {
         const dt = _spinPrev ? Math.min(100, now - _spinPrev) : 16;
         const c = map.getCenter();
-        map.setCenter([c.lng - demoSpinDegPerSec(ROT_DEG_PER_DAY[state.body]) * dt / 1000, c.lat]);   // prograde: surface drifts east
+        const rate = ROT_DEG_PER_DAY[state.body];
+        // Sign carries spin sense (prograde drifts the surface east → centre longitude decreases).
+        map.setCenter([c.lng - Math.sign(rate) * demoSpinDegPerSec(rate) * dt / 1000, c.lat]);
     }
     _spinPrev = now;
     requestAnimationFrame(spinTick);

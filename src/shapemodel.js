@@ -122,6 +122,7 @@ export class ShapeModel extends Emitter {
     async _boot() {
         this._buildDom();
         const t0 = performance.now();
+        const rotP = loadRotation();   // fetch the rotation datastore in parallel with the model
         let glb = null;
         if (this.opts.sphere) {                         // round body shipped as an image map (e.g. the Moon)
             this.mesh = buildSphereMesh();
@@ -146,6 +147,10 @@ export class ShapeModel extends Emitter {
         this.emit('probe', this.probe);
 
         this._radiusGrid = buildRadiusGrid(this.mesh.positions, this.frame);  // dir -> surface radius, for draping
+        // Rotation from the datastore (data/rotation.json): recompute this body's spin from its real
+        // sidereal period/sense, falling back to the IAU rate captured in the constructor.
+        this._rot = await rotP;
+        this._axisRate = demoSpinRate(rotDegPerDay(this._rot, this.body, this._moonDegPerDay));
         this._initGL(glb);
         this._updateSun();
         this._buildGraticule();
@@ -778,7 +783,8 @@ export class ShapeModel extends Emitter {
         const pid = p.name.toLowerCase();
         const {d, T} = Cel.julian(time);
         const mel = Cel.iauElements(this.body, d, T), pe = Cel.iauElements(pid, d, T);
-        const parentDegPerDay = Cel.iauElements(pid, d + 1, T).W - pe.W;     // signed: + prograde, − retrograde
+        const iauDegPerDay = Cel.iauElements(pid, d + 1, T).W - pe.W;        // signed: + prograde, − retrograde
+        const parentDegPerDay = rotDegPerDay(this._rot, pid, iauDegPerDay);  // prefer the datastore
         const axis = norm(this._skyDir(Cel.eqToVec(pe.a0, pe.d0), mel)), alignY2P = alignYtoVec(axis);
         const spinRate = demoSpinRate(parentDegPerDay);   // the primary spins at its own believable demo rate
         this._parentBody = {name: p.name, color: new Float32Array(p.color), bands: p.bands ? 1 : 0, albedo: p.albedo,
@@ -839,8 +845,8 @@ export class ShapeModel extends Emitter {
                     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bmp);
                 }).catch(() => {});
                 // Axis spin, true-relative to this moon: tidally locked, so its rotation period = its orbit
-                // period. Deimos (30.3 h) ends up turning ~0.25× Phobos's rate, in the same (prograde) sense.
-                const sibDegPerDay = 360 * 24 / cfg.orbitHours;
+                // period. Prefer the datastore (Deimos: 30.3 h → ~0.25× Phobos's rate, same prograde sense).
+                const sibDegPerDay = rotDegPerDay(this._rot, cfg.name, 360 * 24 / cfg.orbitHours);
                 const spinRate = demoSpinRate(sibDegPerDay);
                 const sib = {cfg, tex, spinRate, spinAngle: 0,
                     bufPos: buffer(gl, mesh.positions), bufNorm: buffer(gl, mesh.normals),
@@ -1178,6 +1184,24 @@ export default ShapeModel;
 const ROOT = new URL('..', import.meta.url).href;
 const abs = (u) => (/^https?:/.test(u) ? u : ROOT + u.replace(/^\.?\//, ''));
 const clamp01 = (v) => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 1));
+
+// The rotation datastore (data/rotation.json): authoritative sidereal periods, spin sense and poles for
+// every planet and moon. Fetched once and shared across instances; null if it can't be read (callers
+// then fall back to the IAU rate from celestial.js). This is the single source for how fast each body
+// turns in the "rotate on axis" demo and how each parent planet spins behind its moon.
+let _rotationPromise = null;
+function loadRotation() {
+    if (!_rotationPromise) _rotationPromise = fetch(abs('data/rotation.json'))
+        .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    return _rotationPromise;
+}
+// Signed rotation rate (deg/day, + prograde / − retrograde) for a body from the datastore, or `fallback`
+// (the Cel.iauElements-derived rate) when the store is missing the body or unavailable.
+function rotDegPerDay(rot, name, fallback) {
+    const b = rot && rot.bodies && rot.bodies[String(name || '').toLowerCase()];
+    if (!b || typeof b.deg_per_day !== 'number') return fallback;
+    return b.deg_per_day * (b.sense === 'retrograde' ? -1 : 1);
+}
 
 // Normalise an addUserWorld input to something texImage2D accepts (ImageBitmap / <img> / canvas).
 // Mirrors GlobeMap.addUserWorld: a File/Blob, an image URL, or an already-decoded image/canvas.
@@ -1586,7 +1610,11 @@ function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
 // magnitude scaled by reality but clamped to 2..30 deg/s so every body — moon, parent or sibling — turns at
 // a believable, bounded speed (matches the globe's rotate-on-axis). Each body uses this independently, so no
 // single body can be dragged to an absurd rate by another's (e.g. Earth over the slow-turning Moon).
-function demoSpinRate(degPerDay) { return (Math.sign(degPerDay) || 1) * clamp(Math.abs(degPerDay) * 0.03, 2, 30) * Math.PI / 180 / 60; }
+// Map a body's real rotation rate (deg/day, signed for spin sense) to a believable on-screen demo rate.
+// Proportional to reality so relative speeds stay TRUE — Jupiter turns ~17× per Ganymede turn, Phobos
+// ~3.2× per Mars turn — then gently clamped so the slowest body still visibly creeps and the fastest
+// planet doesn't blur. The 0.0115 factor puts Jupiter (870°/day) at a ~36 s rotation (was ~14 s).
+function demoSpinRate(degPerDay) { return (Math.sign(degPerDay) || 1) * clamp(Math.abs(degPerDay) * 0.0115, 0.5, 14) * Math.PI / 180 / 60; }
 function escapeHtml(s) { return String(s).replace(/[&<>"]/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c])); }
 // Strip the translation from a view matrix → an infinity skybox (stars rotate with the view, never shift).
 function rotationOnly(view) { const o = Float32Array.from(view); o[12] = 0; o[13] = 0; o[14] = 0; return o; }
