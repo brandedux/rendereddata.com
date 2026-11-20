@@ -62,6 +62,16 @@ A running status log. Newest entry on top. For architecture and the ship-it guid
   mode with the WebGL ShapeModel renderer — no console errors on either. (Confirmed `maps.js` re-exports the
   same `ShapeModel` class both files instantiate.)
 
+- **SDK hosted-tiles option — built & smoke-tested.** `GlobeMap` gained an opt-in `hosted: {baseUrl, key}`
+  that routes the three metered Earth bases (Blue Marble / Sentinel-2 / VIIRS) through the `/v1/tiles`
+  gateway with a key, instead of straight to GIBS/EOX. Omitted → every tile stays keyless and direct
+  (self-host unchanged). Threaded via `rasterLayer` (its `id` is already the gateway tileset name) and a
+  `hosted` field on the build ctx; trailing slashes trimmed; VIIRS date-scrub only applies to the direct
+  path (the gateway fixes the date). **Verified locally against the real gateway**: a hosted `GlobeMap`
+  drove 36+ tile loads through `/v1/tiles/earth/bluemarble/{z}/{x}/{y}?key=…` (all 200 via the 302→GIBS
+  redirect) and the usage counter metered them. README documents the option. **Pending:** production
+  smoke-test against the live Railway gateway (needs the deployed base URL + a key on the volume).
+
 **Other open build items (not started this session):** raster/image overlays on mesh bodies; mesh
 day/night terminator + sky labels; API keys Phase 3 self-serve (`POST /v1/keys` + `/keys` dashboard,
 gating policy A vs B); Ganymede feature pins not eye-verified to sub-degree. (`catalog.json` — done above.)

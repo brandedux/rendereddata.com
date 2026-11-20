@@ -254,6 +254,17 @@ Cross-origin: set `ALLOW_ORIGIN` to let the browser SDK call `/v1` from another 
 list reflects the request `Origin` when it matches (with `Vary: Origin`). Preflight `OPTIONS` is
 answered 204. The key + origin allow-list + rate limit remain the real access controls.
 
+Using the hosted gateway from the SDK is opt-in — pass `hosted` to `GlobeMap`:
+
+```js
+new GlobeMap({container: 'map', body: 'earth', base: 'bluemarble',
+    hosted: {baseUrl: 'https://api.rendereddata.com', key: 'gv_pk_...'}});
+```
+
+That routes the metered Earth bases (Blue Marble / Sentinel-2 / VIIRS) through `/v1/tiles`; every
+other layer, and self-hosting with `hosted` omitted, stays keyless and direct. (Hosted VIIRS uses the
+gateway's fixed date, so runtime date-scrubbing only applies to the direct path.)
+
 ## Object catalog (`catalog.json`)
 
 `catalog.json` is the license-clear object catalog: every self-hostable source (the manifest's data

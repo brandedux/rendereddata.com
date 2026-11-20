@@ -121,10 +121,20 @@ const CATALOG = {
 };
 
 function rasterLayer(id) {
-    return {build: (e, ctx) => ({
-        sources: {[id]: {type: 'raster', tiles: [e.url.replace('{date}', ctx.date)], tileSize: 256, maxzoom: e.maxzoom, attribution: e.attribution}},
-        layers: [{id, type: 'raster', source: id}]
-    })};
+    // These three Earth bases (id = bluemarble|s2|viirs) are the ones the hosted /v1 gateway can meter.
+    // With a hosted config, their tiles route through the gateway with a key; otherwise they hit the
+    // upstream directly and keyless (the default — self-host stays free). Note: hosted VIIRS uses the
+    // gateway's fixed date, so runtime date-scrubbing (setDate) only affects the direct path.
+    return {build: (e, ctx) => {
+        const h = ctx.hosted;
+        const tile = h
+            ? `${h.baseUrl}/v1/tiles/earth/${id}/{z}/{x}/{y}?key=${encodeURIComponent(h.key)}`
+            : e.url.replace('{date}', ctx.date);
+        return {
+            sources: {[id]: {type: 'raster', tiles: [tile], tileSize: 256, maxzoom: e.maxzoom, attribution: e.attribution}},
+            layers: [{id, type: 'raster', source: id}]
+        };
+    }};
 }
 function equirectLayer(id, mid) {
     return {build: (e) => ({
@@ -180,6 +190,10 @@ export class GlobeMap extends Emitter {
      * @param {boolean} [opts.controls=true] add navigation + scale controls
      * @param {string|false} [opts.background] CSS for the void behind the globe (default: deep-space
      *   gradient). Pass a CSS string to customise, or false to keep the container's own background.
+     * @param {{baseUrl: string, key: string}} [opts.hosted] opt-in hosted tiles: route the metered Earth
+     *   bases (Blue Marble / Sentinel-2 / VIIRS) through the /v1 gateway with a key, e.g.
+     *   `{baseUrl: 'https://api.rendereddata.com', key: 'gv_pk_...'}`. Omit to keep every tile keyless
+     *   and direct (the default — self-hosting never needs a key).
      */
     constructor(opts = {}) {
         super();
@@ -191,6 +205,10 @@ export class GlobeMap extends Emitter {
         this._manifestUrl = opts.manifestUrl || 'manifest.json';
         this._controls = opts.controls !== false;
         this._labels = opts.labels !== false;   // place/feature text labels; toggle at runtime with setLabels()
+        // Opt-in hosted tiles: only when BOTH a base URL and a key are given. Trailing slashes trimmed
+        // so `${baseUrl}/v1/...` is well-formed. Unset → metered bases stay keyless + direct.
+        this._hosted = (opts.hosted && opts.hosted.baseUrl && opts.hosted.key)
+            ? {baseUrl: String(opts.hosted.baseUrl).replace(/\/+$/, ''), key: opts.hosted.key} : null;
         this.probes = {};          // manifest id -> {state, status, type, bytes, ms, error, commercial}
         this._built = new Set();   // catalogue keys whose sources/layers are added
         this._overlays = new Set();// catalogue keys the caller has turned on
@@ -298,7 +316,7 @@ export class GlobeMap extends Emitter {
     _ensureBuilt(key) {
         if (this._built.has(key)) return;
         const def = CATALOG[key];
-        const {sources, layers} = def.build(this.M[def.manifest], {date: this.date});
+        const {sources, layers} = def.build(this.M[def.manifest], {date: this.date, hosted: this._hosted});
         for (const [id, s] of Object.entries(sources)) if (!this.map.getSource(id)) this.map.addSource(id, s);
         for (const l of layers) this.map.addLayer(l, def.slot);
         def.layerIds = layers.map((l) => l.id);
