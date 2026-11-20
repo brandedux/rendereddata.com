@@ -24,7 +24,7 @@ const twoDaysAgo = () => new Date(Date.now() - 2 * 864e5).toISOString().slice(0,
 // Unset or '*' allows any caller; a comma-separated list reflects the request Origin when it matches,
 // so several site origins can share one gateway. The key + origin allow-list + rate limit are the real
 // access controls; CORS just lets the browser read cross-origin responses (e.g. GET /v1/usage via fetch).
-export async function makeKeyGateway(root, {allowOrigin = ''} = {}) {
+export async function makeKeyGateway(root, {allowOrigin = '', keysJson = ''} = {}) {
     const corsList = String(allowOrigin || '*').split(',').map((s) => s.trim()).filter(Boolean);
     const corsAny = corsList.includes('*');
     // Set CORS headers for this request via setHeader(), so they survive the later writeHead()
@@ -44,7 +44,17 @@ export async function makeKeyGateway(root, {allowOrigin = ''} = {}) {
     try {
         const cfg = JSON.parse(await readFile(join(root, 'keys.json'), 'utf8'));
         keys = Object.fromEntries(cfg.keys.map((k) => [k.key, k]));
-    } catch { /* no keys.json → gateway rejects every request with 401 */ }
+    } catch { /* no keys.json → fall back to env / reject */ }
+    // Also accept keys from an env var (GV_KEYS) — a JSON array of {key, origins, rateLimitPerMin} or a
+    // full {keys:[...]}. Public keys only; handy on hosts (Railway, etc.) without a writable volume for
+    // keys.json. Env keys merge over the file; sane defaults fill any missing origins/rate limit.
+    if (keysJson) {
+        try {
+            const parsed = JSON.parse(keysJson);
+            const list = Array.isArray(parsed) ? parsed : (parsed.keys || []);
+            for (const k of list) if (k && k.key) keys[k.key] = {origins: ['*'], rateLimitPerMin: 60, ...k};
+        } catch (e) { console.error('GV_KEYS: could not parse (expected a JSON array of key objects):', e.message); }
+    }
     try {
         const m = JSON.parse(await readFile(join(root, 'manifest.json'), 'utf8'));
         manifest = Object.fromEntries(m.entries.map((e) => [e.id, e]));

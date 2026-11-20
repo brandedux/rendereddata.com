@@ -107,6 +107,13 @@ A running status log. Newest entry on top. For architecture and the ship-it guid
   workflows/pages.yml`), and the Node `/v1` gateway on **Railway** at `api.rendereddata.com` (a subdomain
   CNAME'd to the Railway service, not a folder). Keep Railway OFF `www` (it collides with Pages). Set
   `ALLOW_ORIGIN=https://rendereddata.com` on Railway for CORS; mount a volume for `keys.json`/`usage.json`.
+- **`GV_KEYS` env keys.** Since `keys.json` is git-ignored, a fresh Railway deploy has no keys and 401s
+  every request. Added: the gateway also reads public keys from the `GV_KEYS` env var (JSON array of
+  `{key, origins, rateLimitPerMin}`, defaults `["*"]`/60), merged over `keys.json` — so a volume isn't
+  needed just to hold keys. Verified locally (env-only key → 200 on `/v1/usage`, 302 metered tile).
+  Live check 2026-11-20: `api.rendereddata.com` gateway is up (`/v1/catalog` 200, `/v1/usage` 401) but has
+  no keys yet; apex/www are still on Squarespace (www CNAME → ext-sq.squarespace.com, apex→www redirect
+  loop), so GitHub Pages isn't serving the site yet.
 
 **Other open build items (not started this session):** API keys Phase 3 self-serve (`POST /v1/keys` +
 `/keys` dashboard, gating policy A vs B); Ganymede feature pins not eye-verified to sub-degree; production

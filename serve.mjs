@@ -22,7 +22,8 @@ const CONTACT_SUBJECT = process.env.CONTACT_SUBJECT || 'Rendered Data Contact Fo
 const mailer = mailerFromEnv({...process.env, CONTACT_TO});   // null until SMTP_HOST (+ creds) are set
 // ALLOW_ORIGIN (unset/'*' = any; else a comma-separated allow-list) sets CORS so the browser SDK can
 // call /v1 cross-origin, e.g. from rendereddata.com against api.rendereddata.com.
-const gateway = await makeKeyGateway(root, {allowOrigin: process.env.ALLOW_ORIGIN});   // /v1 metered tiles + usage
+// GV_KEYS (optional) carries public API keys as JSON, for hosts without a writable volume for keys.json.
+const gateway = await makeKeyGateway(root, {allowOrigin: process.env.ALLOW_ORIGIN, keysJson: process.env.GV_KEYS});   // /v1 metered tiles + usage
 const types = {
     '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
     '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.geojson': 'application/geo+json',

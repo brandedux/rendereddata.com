@@ -255,6 +255,10 @@ node scripts/mint-key.mjs "<label>" "<origin1,origin2|*>" [ratePerMin]
 # e.g. node scripts/mint-key.mjs "Acme Corp" "acme.com" 120   → prints gv_pk_…
 ```
 
+On a host without a writable volume for `keys.json` (Railway, etc.), supply the public keys via the
+`GV_KEYS` env var instead — a JSON array of `{key, origins, rateLimitPerMin}` (missing fields default
+to `origins:["*"]`, `60/min`). Env keys merge over any `keys.json`.
+
 Self-hosting never needs a key — a key is a billing boundary on the hosted `/v1` gateway only.
 To request a hosted key from us, use the **Request an API key** button on the site (it routes
 through the contact form). See `docs/api-keys-plan.md` for the full issuance plan.
