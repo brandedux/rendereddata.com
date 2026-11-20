@@ -115,9 +115,18 @@ A running status log. Newest entry on top. For architecture and the ship-it guid
   no keys yet; apex/www are still on Squarespace (www CNAME → ext-sq.squarespace.com, apex→www redirect
   loop), so GitHub Pages isn't serving the site yet.
 
+- **PRODUCTION LIVE + hosted-tiles smoke-test PASSED (2026-11-20).** The full split is up: static site on
+  **GitHub Pages** at `rendereddata.com` (valid Let's Encrypt cert `CN=rendereddata.com`; `www` 301→apex),
+  and the Node `/v1` gateway on **Railway** at `api.rendereddata.com`. The SDK download now serves from the
+  site root (`/rendereddata-maps-sdk.zip`, built by the Pages workflow, relative link — no Release needed).
+  Keys supplied via `GV_KEYS` (no volume). Live smoke-test: 5 tile requests → all 302→GIBS, usage metered
+  1→6; CORS reflected `https://rendereddata.com` + preflight 204. Deploy fixes that got it there this
+  session: `serve.mjs` binds `0.0.0.0` + reads `$PORT`; `GV_KEYS` env keys; startup key-count log. DNS was
+  the long pole (Squarespace forwarding on the apex, resolved by pointing the apex at the GitHub Pages IPs).
+  Follow-up (minor): mount a Railway volume for `usage.json` so counts survive redeploys.
+
 **Other open build items (not started this session):** API keys Phase 3 self-serve (`POST /v1/keys` +
-`/keys` dashboard, gating policy A vs B); Ganymede feature pins not eye-verified to sub-degree; production
-smoke-test of hosted tiles against the live Railway gateway (needs the deployed base URL + a key).
+`/keys` dashboard, gating policy A vs B); Ganymede feature pins not eye-verified to sub-degree.
 
 ## 2026-11-15 (evening) — True-scale moon systems, orbits, scientific accuracy, capture (post-v1)
 
