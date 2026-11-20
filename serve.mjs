@@ -24,6 +24,9 @@ const mailer = mailerFromEnv({...process.env, CONTACT_TO});   // null until SMTP
 // call /v1 cross-origin, e.g. from rendereddata.com against api.rendereddata.com.
 // GV_KEYS (optional) carries public API keys as JSON, for hosts without a writable volume for keys.json.
 const gateway = await makeKeyGateway(root, {allowOrigin: process.env.ALLOW_ORIGIN, keysJson: process.env.GV_KEYS});   // /v1 metered tiles + usage
+// Startup diagnostic (shows in the host's logs): how many /v1 keys loaded, and whether GV_KEYS was seen.
+console.log(`[v1] gateway ready: ${gateway.keyCount} key(s) loaded` +
+    (process.env.GV_KEYS ? ` (GV_KEYS present, ${process.env.GV_KEYS.length} chars)` : ' (GV_KEYS not set)'));
 const types = {
     '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
     '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.geojson': 'application/geo+json',
