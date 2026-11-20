@@ -159,5 +159,7 @@ keys.json
 .DS_Store
 old-package-lock.json
 
-# SDK bundle build output (regenerate with: node build-sdk.mjs)
+# SDK bundle build output (regenerate with: node build-sdk.mjs). The Pages deploy builds the zip and
+# copies it to the root as /rendereddata-maps-sdk.zip; keep that out of git (it's a build artifact).
 /dist/
+/rendereddata-maps-sdk.zip

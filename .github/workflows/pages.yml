@@ -1,5 +1,7 @@
-# Deploy the static site to GitHub Pages. No build step — the site is plain HTML/JS/CSS served as-is,
-# so we upload the repo root (minus gitignored files like keys.json) as the Pages artifact.
+# Deploy the static site to GitHub Pages. The site is plain HTML/JS/CSS served as-is; the only build
+# step bundles the downloadable SDK zip (build-sdk.mjs) and drops it at the site root so the
+# "Download the SDK" button can link to it relatively (/rendereddata-maps-sdk.zip) — always fresh, no
+# GitHub Release needed. We then upload the repo root (minus gitignored files like keys.json).
 #
 # One-time setup: in the repo's Settings → Pages, set "Source" to "GitHub Actions".
 # The custom domain comes from the committed CNAME file (rendereddata.com).
@@ -29,6 +31,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build the downloadable SDK bundle
+        # Produces dist/rendereddata-maps-sdk.zip; publish it at the site root and drop the unzipped
+        # dist/ so only the zip ships. (ubuntu-latest has the `zip` CLI build-sdk.mjs uses.)
+        run: |
+          node build-sdk.mjs
+          cp dist/rendereddata-maps-sdk.zip rendereddata-maps-sdk.zip
+          rm -rf dist
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload site artifact

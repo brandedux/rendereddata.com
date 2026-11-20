@@ -191,8 +191,9 @@ function showPlayground() {
 
 // ------------------------------------------------------------ router
 const VIEWS = ['product', 'developers', 'playground'];
-// Latest SDK release zip — same target as the "Download the SDK" button in the Developers view.
-const SDK_DOWNLOAD_URL = 'https://github.com/brandedux/rendereddata.com/releases/latest/download/rendereddata-maps-sdk.zip';
+// The SDK bundle, built into the site root by the Pages deploy (build-sdk.mjs) — same target as the
+// "Download the SDK" button in the Developers view. Relative so it serves from whatever host runs the site.
+const SDK_DOWNLOAD_URL = '/rendereddata-maps-sdk.zip';
 
 // The top-right nav CTA is "Open the playground" everywhere — except on the playground itself, where
 // that's redundant, so it becomes a direct "Download the SDK" link instead.
