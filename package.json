@@ -11,7 +11,9 @@
     "start": "node serve.mjs",
     "serve": "node serve.mjs",
     "mcp": "node mcp-server.mjs",
-    "build:sdk": "node build-sdk.mjs"
+    "build:sdk": "node build-sdk.mjs",
+    "build:catalog": "node scripts/build-catalog.mjs",
+    "check:catalog": "node scripts/build-catalog.mjs --check"
   },
   "dependencies": {},
   "devDependencies": {}

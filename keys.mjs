@@ -11,7 +11,7 @@ import {join} from 'node:path';
 
 // Which {body}/{tileset} maps to which manifest entry. Earth raster XYZ only; the planetary
 // mosaics need reprojection (see src/eqproj.js) and are not a straight redirect.
-const TILESETS = {
+export const TILESETS = {
     'earth/bluemarble': 'gibs-bluemarble',
     'earth/s2': 'eox-s2-2016',
     'earth/viirs': 'gibs-viirs'
@@ -40,7 +40,7 @@ export async function makeKeyGateway(root, {allowOrigin = ''} = {}) {
         return origin;
     };
 
-    let keys = {}, manifest = {};
+    let keys = {}, manifest = {}, catalog = null;
     try {
         const cfg = JSON.parse(await readFile(join(root, 'keys.json'), 'utf8'));
         keys = Object.fromEntries(cfg.keys.map((k) => [k.key, k]));
@@ -49,6 +49,9 @@ export async function makeKeyGateway(root, {allowOrigin = ''} = {}) {
         const m = JSON.parse(await readFile(join(root, 'manifest.json'), 'utf8'));
         manifest = Object.fromEntries(m.entries.map((e) => [e.id, e]));
     } catch { /* manifest missing → tile routes 404 */ }
+    try {
+        catalog = JSON.parse(await readFile(join(root, 'catalog.json'), 'utf8'));
+    } catch { /* no catalog.json → /v1/catalog 404s (run scripts/build-catalog.mjs) */ }
 
     // Usage persists across restarts: totals and per-day counts are saved to usage.json.
     // The per-minute rate-limit window is ephemeral and intentionally not persisted.
@@ -102,6 +105,13 @@ export async function makeKeyGateway(root, {allowOrigin = ''} = {}) {
         // CORS preflight: browsers send OPTIONS before a cross-origin fetch with non-simple headers.
         if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return true; }
         const parts = url.pathname.split('/').filter(Boolean);   // ['v1', ...]
+        if (parts[1] === 'catalog') {
+            // The open, keyless catalog of license-clear objects (no auth, no metering).
+            if (!catalog) { json(res, 404, {error: 'catalog not built', hint: 'run node scripts/build-catalog.mjs'}); return true; }
+            res.writeHead(200, {'content-type': 'application/json', 'cache-control': 'public, max-age=300'});
+            res.end(JSON.stringify(catalog, null, 2));
+            return true;
+        }
         if (parts[1] === 'usage') {
             const auth = authorize(req, res, url);
             if (!auth) return true;

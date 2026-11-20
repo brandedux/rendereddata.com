@@ -254,6 +254,23 @@ Cross-origin: set `ALLOW_ORIGIN` to let the browser SDK call `/v1` from another 
 list reflects the request `Origin` when it matches (with `Vary: Origin`). Preflight `OPTIONS` is
 answered 204. The key + origin allow-list + rate limit remain the real access controls.
 
+## Object catalog (`catalog.json`)
+
+`catalog.json` is the license-clear object catalog: every self-hostable source (the manifest's data
+layers plus the bundled NASA shape models), each with its license, provenance, commercial flag and
+share-alike status. It's **generated** from `manifest.json` + the shape models — don't hand-edit it:
+
+```
+npm run build:catalog    # regenerate catalog.json
+npm run check:catalog    # fail if it's stale (CI / pre-commit)
+```
+
+Every current object is `tier: "open"` (free, self-hostable). `metered: true` (with `v1_tileset`)
+marks the sources the hosted `/v1` gateway can proxy and bill — the metering boundary, not a paywall
+on the software. The gateway also serves it, keyless, at **`GET /v1/catalog`** (the open catalog the
+MCP server and a future catalog page can read); a future hosted/premium tier would add `tier: "hosted"`
+entries here.
+
 ## MCP server for agents
 
 `mcp-server.mjs` is a dependency-free Model Context Protocol server (JSON-RPC 2.0 over stdio). It

@@ -43,6 +43,15 @@ A running status log. Newest entry on top. For architecture and the ship-it guid
   reference, `PORT`, `ALLOW_ORIGIN`, and the optional `CONTACT_*`/`SMTP_*` vars, with the deploy gotchas
   inline (keys load from `keys.json` on a volume; `PORT` comes from argv → start command `node serve.mjs
   $PORT`). `.gitignore` gained a `local.env` rule since the existing `.env*` rules didn't match the name.
+- **`catalog.json` — built.** The license-clear object catalog the monetization notes called for.
+  **`scripts/build-catalog.mjs`** generates it from `manifest.json` + the bundled NASA shape models
+  (Ganymede/Phobos/Deimos, which stay out of the manifest to avoid ~8 MB of probe loads) — 17 objects,
+  each with license / provenance / commercial / share-alike. Every current object is `tier: "open"`
+  (self-hostable); `metered: true` + `v1_tileset` marks the 3 sources the `/v1` gateway proxies (shared
+  with `keys.mjs` via the now-exported `TILESETS`, so the boundary can't drift). The generator has a
+  `--check` mode (added `npm run build:catalog` / `check:catalog`). The gateway serves it **keyless at
+  `GET /v1/catalog`** (with CORS) — the open catalog the MCP server / a future catalog page can read.
+  Verified end-to-end with curl (keyless 200 + CORS; tiles still 401 without a key). README documents it.
 - **Redundant code removed — shape bodies.** The Ganymede/Phobos config (model, radii, calibration
   `northAxis/lon0/lonDir`, named features) was duplicated byte-for-byte in `src/poc.js` (`SHAPE`) and
   `shapes.html` (`BODIES`) — the long-standing drift risk flagged in the 2026-11-14 notes. Hoisted into
@@ -53,9 +62,9 @@ A running status log. Newest entry on top. For architecture and the ship-it guid
   mode with the WebGL ShapeModel renderer — no console errors on either. (Confirmed `maps.js` re-exports the
   same `ShapeModel` class both files instantiate.)
 
-**Other open build items (unchanged, not started this session):** `catalog.json` (formalize open-vs-hosted
-object catalog — the manifest already carries id/kind/license/commercial/hosted, so this is an extraction +
-a consumer decision); raster/image overlays on mesh bodies; mesh day/night terminator + sky labels.
+**Other open build items (not started this session):** raster/image overlays on mesh bodies; mesh
+day/night terminator + sky labels; API keys Phase 3 self-serve (`POST /v1/keys` + `/keys` dashboard,
+gating policy A vs B); Ganymede feature pins not eye-verified to sub-degree. (`catalog.json` — done above.)
 
 ## 2026-11-15 (evening) — True-scale moon systems, orbits, scientific accuracy, capture (post-v1)
 
