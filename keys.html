@@ -135,7 +135,13 @@
       const b = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(b.error || `Request failed (${res.status})`);
       out.className = 'out ok';
-      out.textContent = `${b.label || 'key'} — ${b.total} total requests · ${b.remainingThisMinute}/${b.rateLimitPerMin} left this minute`;
+      out.innerHTML = `<b>${b.label || 'key'}</b> — usage report`
+        + `<div class="note" style="margin-top:8px;line-height:1.8">`
+        + `Total requests: <b>${b.total ?? 0}</b><br>`
+        + `Today: <b>${b.today ?? 0}</b><br>`
+        + `Rate limit: <b>${b.rateLimitPerMin}/min</b> — ${b.remainingThisMinute} left this minute`
+        + (b.scopes && b.scopes.length ? `<br>Scopes: ${b.scopes.join(', ')}` : '')
+        + `</div>`;
     } catch (err) { out.className = 'out err'; out.textContent = err.message; }
   });
 </script>

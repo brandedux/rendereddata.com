@@ -67,14 +67,18 @@ export async function makeKeyGateway(root, opts = {}) {
     const mintHits = new Map();  // ip -> [timestamps] for the self-serve mint cap
 
     // Enforce existence, email-verification, origin allow-list and rate limit, or send the right error.
-    function authorize(req, res, url) {
+    // enforceOrigin=false for read-only management calls (usage report): the key itself is the credential,
+    // so the owner can check it from anywhere; the origin allow-list only gates tile serving.
+    function authorize(req, res, url, enforceOrigin = true) {
         const key = url.searchParams.get('key');
         const k = key && db.getKey(key);
         if (!k) { json(res, 401, {error: 'invalid or missing key', hint: 'pass ?key=gv_pk_...'}); return null; }
         if (!k.verified) { json(res, 403, {error: 'email not verified — check your inbox for the verification link'}); return null; }
-        const origin = req.headers.origin || (req.headers.referer ? safeOrigin(req.headers.referer) : '');
-        const allowed = k.origins.includes('*') || (origin && k.origins.some((o) => origin.includes(o)));
-        if (!allowed) { json(res, 403, {error: 'origin not allowed for this key', origin: origin || '(none)', allowed: k.origins}); return null; }
+        if (enforceOrigin) {
+            const origin = req.headers.origin || (req.headers.referer ? safeOrigin(req.headers.referer) : '');
+            const allowed = k.origins.includes('*') || (origin && k.origins.some((o) => origin.includes(o)));
+            if (!allowed) { json(res, 403, {error: 'origin not allowed for this key', origin: origin || '(none)', allowed: k.origins}); return null; }
+        }
         const minute = Math.floor(Date.now() / 60000);
         let w = windows.get(key);
         if (!w || w.minute !== minute) windows.set(key, (w = {minute, count: 0}));
@@ -151,12 +155,12 @@ export async function makeKeyGateway(root, opts = {}) {
         }
         if (parts[1] === 'verify') { verify(req, res, url); return true; }
         if (parts[1] === 'usage') {
-            const auth = authorize(req, res, url);
+            const auth = authorize(req, res, url, false);   // read-only report: not origin-gated
             if (!auth) return true;
             const {k, w} = auth, u = db.usage(auth.key);
             json(res, 200, {key: auth.key, label: k.label, scopes: k.scopes, rateLimitPerMin: k.rateLimitPerMin,
                 thisMinute: w.count, remainingThisMinute: Math.max(0, k.rateLimitPerMin - w.count),
-                total: u.total, byDay: u.days, origins: k.origins});
+                today: u.days[today()] || 0, total: u.total, byDay: u.days, origins: k.origins});
             return true;
         }
         if (parts[1] === 'tiles') {
