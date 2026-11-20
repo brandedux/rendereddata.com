@@ -19,6 +19,16 @@ A running status log. Newest entry on top. For architecture and the ship-it guid
   `scopes` column + usage tables are the groundwork). Not built yet; the keyed `/v1/usage` lookup on
   `/keys` covers reports for now.
 - **Railway cleanup:** the `SMTP_*` and `RESEND_API_KEY`/`MAIL_FROM` vars are now optional — can be removed.
+- **PRODUCTION FINAL CHECK PASSED (2026-11-20):** against the live gateway — mint → `201 active`, the key
+  works instantly (`/v1/usage` 200, `/v1/tiles` 302 metered), usage report reads back, seeded admin key
+  still works. Self-serve keys feature is **done and live** at `rendereddata.com/keys`.
+- **Housekeeping:** added **`scripts/prune-keys.mjs`** (dry-run default, `--yes` to apply) to remove
+  test/debug keys (`@brandedux.com`/`@example.com` + any unverified) while sparing admin keys (email NULL)
+  and real customer keys. Verified locally. The production DB still holds the email-debug test keys —
+  prune them from the Railway **Console** with (node isn't on PATH there; use the mise path, DB_PATH is set):
+  `/mise/installs/node/22.23.4/bin/node scripts/prune-keys.mjs --yes` (after a redeploy includes the script),
+  or the inline one-liner noted to the user. Harmless clutter, not urgent. The Node version path may change
+  across deploys — resolve it live with `readlink -f /proc/1/exe`.
 
 ## 2026-11-20 (later) — Verification email via Resend (Railway blocks SMTP)
 
