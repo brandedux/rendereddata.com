@@ -240,9 +240,16 @@ per-minute rate limit, and counted per key. Usage totals and per-day counts pers
 and survive a restart (`usage.json` is never served); a real deployment would run this at the edge.
 
 ```
-GET /v1/tiles/{body}/{tileset}/{z}/{x}/{y}?key=gv_pk_...   # 302 → upstream tile, metered
-GET /v1/usage?key=gv_pk_...                                # { total, thisMinute, remainingThisMinute, byDay }
+GET  /v1/tiles/{body}/{tileset}/{z}/{x}/{y}?key=gv_pk_...  # 302 → upstream tile, metered
+GET  /v1/usage?key=gv_pk_...                               # { total, thisMinute, remainingThisMinute, byDay }
+GET  /v1/catalog                                           # keyless: the license-clear object catalog
+POST /v1/keys   { email, label?, origins? }               # self-serve: mint a public key → { key, ... }
 ```
+
+Self-serve keys: `POST /v1/keys` mints a public `gv_pk_` key (abuse-gated by a honeypot, a valid email,
+one key per email, and a per-IP cap) and appends it to `keys.json`. The **`/keys` page** (`keys.html`)
+is the browser front-end for it, plus a usage lookup. On a container host, minted keys need a **mounted
+volume** for `keys.json` to survive redeploys (they work immediately for the running process either way).
 
 Tilesets map to manifest sources (`earth/bluemarble`, `earth/s2`, `earth/viirs`); the planetary
 mosaics need reprojection and are not a straight redirect. Returns 401 (no/invalid key), 403

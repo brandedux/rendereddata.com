@@ -7,6 +7,7 @@
 // origin must be allowed, and the key must be under its per-minute rate limit. Usage is counted
 // per key and persisted to usage.json, so totals survive a server restart.
 import {readFile, writeFile} from 'node:fs/promises';
+import {randomBytes} from 'node:crypto';
 import {join} from 'node:path';
 
 // Which {body}/{tileset} maps to which manifest entry. Earth raster XYZ only; the planetary
@@ -34,7 +35,7 @@ export async function makeKeyGateway(root, {allowOrigin = '', keysJson = ''} = {
         if (!origin) return '';
         res.setHeader('access-control-allow-origin', origin);
         if (origin !== '*') res.setHeader('vary', 'Origin');
-        res.setHeader('access-control-allow-methods', 'GET, OPTIONS');
+        res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS');
         res.setHeader('access-control-allow-headers', 'Authorization, Content-Type');
         res.setHeader('access-control-max-age', '86400');
         return origin;
@@ -89,6 +90,47 @@ export async function makeKeyGateway(root, {allowOrigin = '', keysJson = ''} = {
         return u;
     };
 
+    // ---- self-serve key minting (POST /v1/keys) --------------------------------------------------
+    // Public endpoint: anyone can request a gv_pk_ key for the hosted tiles. The keys are public
+    // (origin-allowlisted + rate-limited), so abuse control is light: a honeypot, a valid email,
+    // one key per email, and a per-IP cap. New keys append to keys.json — on a container host that
+    // needs a MOUNTED VOLUME for keys.json or they won't survive a redeploy (they always work for the
+    // running process). The GV_KEYS env path is for seeded keys; self-serve needs the writable file.
+    const keysFile = join(root, 'keys.json');
+    const mintHits = new Map();   // ip -> [timestamps] for the per-IP mint rate limit
+    const mintAllowed = (ip) => {
+        const now = Date.now(), arr = (mintHits.get(ip) || []).filter((t) => t > now - 3600000);
+        if (arr.length >= 5) { mintHits.set(ip, arr); return false; }   // max 5 keys / IP / hour
+        arr.push(now); mintHits.set(ip, arr); return true;
+    };
+    const persistKey = async (rec) => {
+        try {
+            let store = {note: 'API keys for the metered /v1 gateway. Public keys only, no secrets.', keys: []};
+            try { const cur = JSON.parse(await readFile(keysFile, 'utf8')); if (Array.isArray(cur.keys)) store = cur; } catch { /* new file */ }
+            store.keys.push(rec);
+            await writeFile(keysFile, JSON.stringify(store, null, 2) + '\n');
+        } catch (e) { console.error('[v1] could not persist minted key to keys.json (needs a writable/mounted volume):', e.message); }
+    };
+    async function mintKeyFromRequest(req, res) {
+        let body;
+        try { body = JSON.parse(await readBody(req)); }
+        catch { return json(res, 400, {error: 'invalid or too-large JSON body'}); }
+        if (body.botcheck) return json(res, 200, {ok: true});   // honeypot tripped: pretend success, drop the bot
+        const email = String(body.email || '').trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json(res, 422, {error: 'a valid email is required'});
+        const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+        if (!mintAllowed(ip)) return json(res, 429, {error: 'too many key requests from your network; try again later'});
+        if (Object.values(keys).some((k) => k.email === email)) return json(res, 409, {error: 'a key already exists for this email — contact us to recover it'});
+        const origins = (Array.isArray(body.origins) ? body.origins : String(body.origins || '*').split(','))
+            .map((s) => String(s).trim()).filter(Boolean);
+        const rec = {key: 'gv_pk_' + randomBytes(16).toString('hex'), label: String(body.label || email).slice(0, 80),
+            origins: origins.length ? origins : ['*'], rateLimitPerMin: 60, email, created: new Date().toISOString()};
+        keys[rec.key] = rec;                 // live immediately
+        await persistKey(rec);               // best-effort durability
+        console.log(`[v1] minted key for ${email} (origins: ${rec.origins.join(', ')})`);
+        json(res, 201, {key: rec.key, label: rec.label, origins: rec.origins, rateLimitPerMin: rec.rateLimitPerMin});
+    }
+
     // Returns the key record after enforcing existence, origin allow-list and rate limit,
     // or sends the appropriate 401/403/429 and returns null.
     function authorize(req, res, url) {
@@ -120,6 +162,12 @@ export async function makeKeyGateway(root, {allowOrigin = '', keysJson = ''} = {
             if (!catalog) { json(res, 404, {error: 'catalog not built', hint: 'run node scripts/build-catalog.mjs'}); return true; }
             res.writeHead(200, {'content-type': 'application/json', 'cache-control': 'public, max-age=300'});
             res.end(JSON.stringify(catalog, null, 2));
+            return true;
+        }
+        if (parts[1] === 'keys') {
+            // Self-serve: POST a request to mint a public key. GET is not a listing (keys are not public).
+            if (req.method !== 'POST') { json(res, 405, {error: 'POST an {email, label, origins} body to request a key'}); return true; }
+            mintKeyFromRequest(req, res);   // async: reads the body, then responds
             return true;
         }
         if (parts[1] === 'usage') {
@@ -156,3 +204,13 @@ export async function makeKeyGateway(root, {allowOrigin = '', keysJson = ''} = {
 }
 
 function safeOrigin(referer) { try { return new URL(referer).origin; } catch { return ''; } }
+
+// Read a request body with a hard size cap, so a bad client cannot exhaust memory.
+function readBody(req, limit = 16 * 1024) {
+    return new Promise((resolve, reject) => {
+        let size = 0; const chunks = [];
+        req.on('data', (c) => { size += c.length; if (size > limit) { reject(new Error('too large')); req.destroy(); } else chunks.push(c); });
+        req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+        req.on('error', reject);
+    });
+}

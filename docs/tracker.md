@@ -5,6 +5,18 @@ A running status log. Newest entry on top. For architecture and the ship-it guid
 
 ---
 
+## 2026-11-20 (later) — Self-serve API keys (Phase 3, option B)
+
+- **Public self-serve key signup — built & verified** (user picked gating option B). `POST /v1/keys`
+  (`keys.mjs`) mints a public `gv_pk_` key and appends it to `keys.json`, gated by a honeypot, a valid
+  email, one-key-per-email, and a per-IP cap (5/hour). CORS now allows POST. New **`keys.html`** (`/keys`)
+  is the branded front-end: a request form (email/label/origins) that shows the generated key, plus a
+  usage-lookup box. The site's "Request an API key" CTA now links to `/keys` (was the contact form).
+  Verified end-to-end in-browser: form mints a key, usage lookup reads it back; and via curl: 405 on GET,
+  422 bad email, 200 honeypot-drop, 201 mint, 409 duplicate email, origin allow-list enforced, persisted
+  to keys.json. **Prod note:** minted keys need a mounted Railway **volume** for `keys.json` to survive
+  redeploys (they work for the running process regardless).
+
 ## 2026-11-20 (later) — Datastore-driven rotation; Jupiter spin corrected (post-v1)
 
 - **Jupiter was spinning far too fast** in the "rotate on axis" demo (~14 s/rotation). Root cause wasn't the

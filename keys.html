@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Get an API key — Rendered Data</title>
+<meta name="description" content="Generate a free public API key for Rendered Data's hosted planetary tiles. No account — just an email.">
+<meta name="theme-color" content="#080b0e">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="design/tokens.css">
+<style>
+  html, body { min-height: 100%; }
+  body { margin: 0; background: var(--gv-bg); color: var(--gv-ink); font-family: var(--gv-font-sans);
+    display: grid; place-items: start center; padding: 40px 24px 64px; }
+  .wrap { width: 100%; max-width: 560px; }
+  .logo { display: inline-flex; align-items: center; gap: 10px; color: var(--gv-ink); text-decoration: none;
+    font-weight: 600; letter-spacing: -.01em; font-size: 16px; margin-bottom: 36px; }
+  .logo svg { height: 22px; width: auto; fill: currentColor; }
+  h1 { font-size: clamp(24px, 5vw, 32px); line-height: 1.1; letter-spacing: -.02em; margin: 0 0 12px; font-weight: 600; }
+  .lede { color: var(--gv-ink-muted); font-size: 16px; line-height: 1.6; margin: 0 0 28px; }
+  .card { border: 1px solid var(--gv-hairline); border-radius: 12px; padding: 22px; background: var(--gv-panel, rgba(255,255,255,.02)); margin-bottom: 20px; }
+  .card h2 { font-size: 15px; margin: 0 0 14px; font-weight: 600; letter-spacing: -.01em; }
+  label.f { display: block; margin-bottom: 14px; font-size: 13px; color: var(--gv-ink-muted); }
+  label.f span { display: block; margin-bottom: 5px; }
+  input[type=email], input[type=text] { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 8px;
+    border: 1px solid var(--gv-hairline); background: var(--gv-bg); color: var(--gv-ink); font: 400 14px var(--gv-font-sans); }
+  input:focus { outline: none; border-color: var(--gv-accent); }
+  .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; padding: 11px 18px; border-radius: 9px;
+    font: 500 14px var(--gv-font-sans); cursor: pointer; border: 1px solid transparent;
+    background: var(--gv-accent-btn, var(--gv-accent)); color: var(--gv-ink-on-accent, #fff); }
+  .btn:hover { background: var(--gv-accent-btn-hi, var(--gv-accent-hi)); }
+  .btn:disabled { opacity: .6; cursor: default; }
+  .btn--ghost { background: transparent; border-color: var(--gv-hairline); color: var(--gv-ink); }
+  .btn--ghost:hover { background: var(--gv-panel-hi, rgba(255,255,255,.05)); border-color: var(--gv-ink-muted); }
+  .out { margin-top: 14px; font: 13px var(--gv-font-mono, ui-monospace, monospace); }
+  .key { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+  .key code { flex: 1; padding: 10px 12px; border-radius: 8px; background: var(--gv-bg); border: 1px solid var(--gv-hairline);
+    color: var(--gv-accent-hi, var(--gv-accent)); word-break: break-all; }
+  .note { font-size: 12px; color: var(--gv-ink-muted); line-height: 1.5; margin-top: 10px; }
+  .err { color: #e2675f; }
+  .ok { color: var(--gv-accent, #3a9); }
+  a.link { color: var(--gv-accent-hi, var(--gv-accent)); }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="logo" href="/">
+    <svg viewBox="0 0 325 424" aria-hidden="true"><path d="M0 0H113A212 212 0 0 1 236.973 383.973L174.332 321.332A130 130 0 0 0 104 82H0ZM0 164H110A48 48 0 0 1 110 260H0ZM0 342H79L161 424H0Z"/></svg>
+    <span>Rendered Data</span>
+  </a>
+
+  <h1>Get an API key</h1>
+  <p class="lede">A free, public key for the hosted <code>/v1</code> planetary tiles. Self-hosting never needs
+    a key — this is only for our hosted service. No account, just an email.</p>
+
+  <div class="card">
+    <h2>Request a key</h2>
+    <form id="mint">
+      <label class="f"><span>Email *</span><input type="email" name="email" required placeholder="you@example.com"></label>
+      <label class="f"><span>Label (optional)</span><input type="text" name="label" placeholder="My project"></label>
+      <label class="f"><span>Allowed origins (optional, comma-separated)</span>
+        <input type="text" name="origins" placeholder="https://mysite.com — blank allows any origin"></label>
+      <div class="hp" aria-hidden="true"><label>Leave blank<input type="text" name="botcheck" tabindex="-1" autocomplete="off"></label></div>
+      <button class="btn" id="mint-btn" type="submit">Generate key</button>
+      <div class="out" id="mint-out"></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Check usage</h2>
+    <form id="usage">
+      <label class="f"><span>Your key</span><input type="text" name="key" placeholder="gv_pk_…"></label>
+      <button class="btn btn--ghost" type="submit">Look up</button>
+      <div class="out" id="usage-out"></div>
+    </form>
+  </div>
+
+  <p class="note">Keys are public identifiers, protected by an origin allow-list and a per-minute rate limit —
+    safe to ship in client code. Pass yours as <code>?key=gv_pk_…</code>. See the
+    <a class="link" href="/#developers/sdk">SDK docs</a> for the <code>hosted</code> option.</p>
+</main>
+
+<script type="module">
+  // The gateway lives on the api subdomain in production; same-origin when serving locally via serve.mjs.
+  const API = ['localhost', '127.0.0.1'].includes(location.hostname) ? '' : 'https://api.rendereddata.com';
+  const $ = (id) => document.getElementById(id);
+
+  $('mint').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = $('mint-btn'), out = $('mint-out');
+    const data = Object.fromEntries(new FormData(e.target));
+    if (data.botcheck) return;                       // honeypot
+    btn.disabled = true; out.className = 'out'; out.textContent = 'Generating…';
+    try {
+      const res = await fetch(`${API}/v1/keys`, {method: 'POST', headers: {'content-type': 'application/json'},
+        body: JSON.stringify({email: data.email, label: data.label, origins: data.origins})});
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
+      out.className = 'out ok';
+      out.innerHTML = `Your key${body.origins ? ` (origins: ${body.origins.join(', ')}, ${body.rateLimitPerMin}/min)` : ''}:`
+        + `<div class="key"><code id="k">${body.key}</code><button type="button" class="btn btn--ghost" id="copy">Copy</button></div>`
+        + `<div class="note">Save it now — we don't show it again. Keep it with your project.</div>`;
+      $('copy').addEventListener('click', () => navigator.clipboard?.writeText(body.key));
+      e.target.reset();
+    } catch (err) {
+      out.className = 'out err'; out.textContent = err.message;
+    } finally { btn.disabled = false; }
+  });
+
+  $('usage').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const out = $('usage-out'), key = new FormData(e.target).get('key').trim();
+    if (!key) return;
+    out.className = 'out'; out.textContent = 'Looking up…';
+    try {
+      const res = await fetch(`${API}/v1/usage?key=${encodeURIComponent(key)}`);
+      const b = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(b.error || `Request failed (${res.status})`);
+      out.className = 'out ok';
+      out.textContent = `${b.label || 'key'} — ${b.total} total requests · ${b.remainingThisMinute}/${b.rateLimitPerMin} left this minute`;
+    } catch (err) { out.className = 'out err'; out.textContent = err.message; }
+  });
+</script>
+</body>
+</html>
