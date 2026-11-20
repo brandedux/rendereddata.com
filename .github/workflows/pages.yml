@@ -34,7 +34,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - name: Build the downloadable SDK bundle
         # Produces dist/rendereddata-maps-sdk.zip; publish it at the site root and drop the unzipped
         # dist/ so only the zip ships. (ubuntu-latest has the `zip` CLI build-sdk.mjs uses.)

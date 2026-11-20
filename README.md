@@ -229,22 +229,28 @@ general-purpose mail library.
 
 ## Keys and metering (`/v1`)
 
-`serve.mjs` also exposes a minimal metered gateway (`keys.mjs`). Keys live in `keys.json` (public
-keys only, no secrets). Each request is checked against the key, its origin allow-list and a
-per-minute rate limit, and counted per key. Usage totals and per-day counts persist to `usage.json`
-and survive a restart (`usage.json` is never served); a real deployment would run this at the edge.
+`serve.mjs` also exposes a minimal metered gateway (`keys.mjs`). Keys, email-verification state and
+usage live in a **SQLite database** (`db.mjs`, Node's built-in `node:sqlite` — so **Node ≥ 22** and
+nothing to install). Each request is checked against the key, its verification status, origin
+allow-list and a per-minute rate limit, and counted per key. The DB file is never served; point
+`DB_PATH` at a mounted volume so it survives redeploys. (Admin keys can still be seeded from
+`keys.json` / `GV_KEYS` — they import pre-verified.)
 
 ```
 GET  /v1/tiles/{body}/{tileset}/{z}/{x}/{y}?key=gv_pk_...  # 302 → upstream tile, metered
 GET  /v1/usage?key=gv_pk_...                               # { total, thisMinute, remainingThisMinute, byDay }
 GET  /v1/catalog                                           # keyless: the license-clear object catalog
-POST /v1/keys   { email, label?, origins? }               # self-serve: mint a public key → { key, ... }
+POST /v1/keys   { email, label?, origins? }               # self-serve: mint + email a verify link
+GET  /v1/verify?token=...                                  # confirm the email, activate the key
 ```
 
-Self-serve keys: `POST /v1/keys` mints a public `gv_pk_` key (abuse-gated by a honeypot, a valid email,
-one key per email, and a per-IP cap) and appends it to `keys.json`. The **`/keys` page** (`keys.html`)
-is the browser front-end for it, plus a usage lookup. On a container host, minted keys need a **mounted
-volume** for `keys.json` to survive redeploys (they work immediately for the running process either way).
+Self-serve keys (email-verified): `POST /v1/keys` mints a public `gv_pk_` key, stores it **unverified**,
+and emails a verification link (abuse-gated by a honeypot, a valid email, one verified key per email,
+and a per-IP cap). The key returns `403` until the recipient clicks `GET /v1/verify?token=…`, which
+activates it and redirects back to `/keys?verified=1`. Verification emails send over SMTP via
+`mailer.mjs` (e.g. Zoho — set `SMTP_*`); if SMTP is unset, the link is logged instead. The **`/keys`
+page** (`keys.html`) is the browser front-end — request form + usage lookup. `scopes` on each key is
+reserved for future entitlements (tiles today; data layers / other products later).
 
 Tilesets map to manifest sources (`earth/bluemarble`, `earth/s2`, `earth/viirs`); the planetary
 mosaics need reprojection and are not a straight redirect. Returns 401 (no/invalid key), 403

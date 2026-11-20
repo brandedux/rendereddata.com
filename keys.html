@@ -54,7 +54,9 @@
 
   <h1>Get an API key</h1>
   <p class="lede">A free, public key for the hosted <code>/v1</code> planetary tiles. Self-hosting never needs
-    a key — this is only for our hosted service. No account, just an email.</p>
+    a key — this is only for our hosted service. Just confirm your email to activate it.</p>
+
+  <div id="banner" class="card" hidden></div>
 
   <div class="card">
     <h2>Request a key</h2>
@@ -88,6 +90,18 @@
   const API = ['localhost', '127.0.0.1'].includes(location.hostname) ? '' : 'https://api.rendereddata.com';
   const $ = (id) => document.getElementById(id);
 
+  // After the email link redirects back here (?verified=1|expired|invalid), show a banner.
+  const verified = new URLSearchParams(location.search).get('verified');
+  if (verified) {
+    const b = $('banner'), msg = {
+      '1': ['ok', '✓ Email verified — your key is now active. Use it with <code>?key=gv_pk_…</code>.'],
+      'expired': ['err', 'That verification link expired. Request a new key below.'],
+      'invalid': ['err', 'That verification link is invalid or already used.'],
+    }[verified];
+    if (msg) { b.hidden = false; b.innerHTML = `<div class="out ${msg[0]}" style="margin:0">${msg[1]}</div>`; }
+    history.replaceState(null, '', location.pathname);   // clean the URL
+  }
+
   $('mint').addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = $('mint-btn'), out = $('mint-out');
@@ -100,9 +114,10 @@
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
       out.className = 'out ok';
-      out.innerHTML = `Your key${body.origins ? ` (origins: ${body.origins.join(', ')}, ${body.rateLimitPerMin}/min)` : ''}:`
+      out.innerHTML = `${body.message || 'Check your email to verify.'}`
         + `<div class="key"><code id="k">${body.key}</code><button type="button" class="btn btn--ghost" id="copy">Copy</button></div>`
-        + `<div class="note">Save it now — we don't show it again. Keep it with your project.</div>`;
+        + `<div class="note">Save this key now. It activates the moment you click the verification link we just`
+        + ` emailed to <b>${body.email || 'your inbox'}</b> — until then it returns 403.</div>`;
       $('copy').addEventListener('click', () => navigator.clipboard?.writeText(body.key));
       e.target.reset();
     } catch (err) {

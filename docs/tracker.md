@@ -5,6 +5,25 @@ A running status log. Newest entry on top. For architecture and the ship-it guid
 
 ---
 
+## 2026-11-20 (later) — SQLite database + email-verified API keys
+
+- **Keys/usage moved to a SQLite database** (`db.mjs`, Node's built-in `node:sqlite` — dependency-free,
+  but needs **Node ≥ 22**; bumped `engines`, added `.nvmrc`, Pages CI → Node 22). Tables: `api_keys`
+  (with `verified`, `verify_token`, and a forward-looking `scopes` column for future product entitlements)
+  and `usage`. `keys.mjs` is now DB-backed; admin keys from `keys.json`/`GV_KEYS` seed in **pre-verified**.
+  `DB_PATH` points at a mounted Railway volume so it persists; the DB file is blocked from static serving.
+  **Durability win:** verified in-browser/curl that keys survive a full server restart (the JSON-on-no-volume
+  setup didn't).
+- **Email verification** (user chose SQLite + Zoho). `POST /v1/keys` now stores the key **unverified** and
+  emails a `…/v1/verify?token=…` link via `mailer.mjs` over SMTP (Zoho: `SMTP_HOST=smtp.zoho.com`, 465/TLS;
+  if SMTP is unset the link is logged). The key returns **403 until verified**; clicking the link activates
+  it and redirects to `/keys?verified=1`. `keys.html` shows the pending state + a verified banner. (Web3Forms
+  can't do this — it only notifies your own inbox, so Zoho SMTP it is.) Verified full flow end-to-end:
+  mint→403→verify→200→tile meters→survives restart; duplicate verified email → 409.
+- **New env** (`local.env` updated): `DB_PATH`, `PUBLIC_API_URL` (verify-link base), `SMTP_*` (Zoho),
+  `VERIFY_REDIRECT`. **Railway to-dos:** set Node 22 (engines/.nvmrc do this), mount a volume for `DB_PATH`,
+  and set the Zoho `SMTP_*` + `PUBLIC_API_URL=https://api.rendereddata.com`.
+
 ## 2026-11-20 (later) — Self-serve API keys (Phase 3, option B)
 
 - **Public self-serve key signup — built & verified** (user picked gating option B). `POST /v1/keys`

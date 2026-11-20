@@ -15,6 +15,9 @@ const leadsDir = join(root, 'leads');
 const leadsFile = join(leadsDir, 'enterprise.jsonl');
 const keysFile = join(root, 'keys.json');
 const usageFile = join(root, 'usage.json');
+// SQLite store for the /v1 gateway (keys, verification, usage). DB_PATH points it at a mounted volume
+// in production so it survives redeploys; it must never be served statically (blocked below).
+const dbPath = process.env.DB_PATH || join(root, 'data.db');
 // Where contact-form submissions are emailed, and the subject they arrive with. The recipient and
 // subject are app config (overridable by env); the SMTP host/credentials stay secret, in env only.
 const CONTACT_TO = process.env.CONTACT_TO || 'hello@sorcery.llc';
@@ -22,8 +25,12 @@ const CONTACT_SUBJECT = process.env.CONTACT_SUBJECT || 'Rendered Data Contact Fo
 const mailer = mailerFromEnv({...process.env, CONTACT_TO});   // null until SMTP_HOST (+ creds) are set
 // ALLOW_ORIGIN (unset/'*' = any; else a comma-separated allow-list) sets CORS so the browser SDK can
 // call /v1 cross-origin, e.g. from rendereddata.com against api.rendereddata.com.
-// GV_KEYS (optional) carries public API keys as JSON, for hosts without a writable volume for keys.json.
-const gateway = await makeKeyGateway(root, {allowOrigin: process.env.ALLOW_ORIGIN, keysJson: process.env.GV_KEYS});   // /v1 metered tiles + usage
+// GV_KEYS (optional) seeds pre-verified public keys. PUBLIC_API_URL is the base used in verification
+// links (defaults to the request host). The contact mailer doubles as the verification-email sender.
+const gateway = await makeKeyGateway(root, {
+    allowOrigin: process.env.ALLOW_ORIGIN, keysJson: process.env.GV_KEYS, dbPath,
+    mailer, publicUrl: process.env.PUBLIC_API_URL, verifyRedirect: process.env.VERIFY_REDIRECT || '/keys',
+});   // /v1 metered tiles + usage + self-serve keys
 // Startup diagnostic (shows in the host's logs): how many /v1 keys loaded, and whether GV_KEYS was seen.
 console.log(`[v1] gateway ready: ${gateway.keyCount} key(s) loaded` +
     (process.env.GV_KEYS ? ` (GV_KEYS present, ${process.env.GV_KEYS.length} chars)` : ' (GV_KEYS not set)'));
@@ -116,6 +123,7 @@ createServer(async (req, res) => {
         if (!file.startsWith(root.endsWith(sep) ? root : root + sep)) throw Object.assign(new Error('forbidden'), {code: 403});
         if (file === leadsDir || file.startsWith(leadsDir + sep)) throw Object.assign(new Error('forbidden'), {code: 403}); // never serve stored leads
         if (file === keysFile || file === usageFile) throw Object.assign(new Error('forbidden'), {code: 403});             // never serve the key store or usage counts
+        if (file === dbPath || file.startsWith(dbPath)) throw Object.assign(new Error('forbidden'), {code: 403});          // never serve the SQLite DB (or its -wal/-shm sidecars)
         // Clean URLs, matching GitHub Pages: /thanks resolves to thanks.html when there is no exact file.
         if (!(await isFile(file)) && await isFile(file + '.html')) file += '.html';
         if (!(await isFile(file))) throw new Error('not a file');

@@ -163,3 +163,7 @@ old-package-lock.json
 # copies it to the root as /rendereddata-maps-sdk.zip; keep that out of git (it's a build artifact).
 /dist/
 /rendereddata-maps-sdk.zip
+
+# SQLite gateway DB (keys, verification, usage) — runtime data, never committed
+/data.db
+/data.db-*
