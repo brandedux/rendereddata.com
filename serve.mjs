@@ -6,6 +6,7 @@ import {readFile, stat, mkdir, appendFile} from 'node:fs/promises';
 import {extname, join, normalize, sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {sendMail, mailerFromEnv} from './mailer.mjs';
+import {makeSender} from './email.mjs';
 import {makeKeyGateway} from './keys.mjs';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
@@ -27,10 +28,13 @@ const mailer = mailerFromEnv({...process.env, CONTACT_TO});   // null until SMTP
 // call /v1 cross-origin, e.g. from rendereddata.com against api.rendereddata.com.
 // GV_KEYS (optional) seeds pre-verified public keys. PUBLIC_API_URL is the base used in verification
 // links (defaults to the request host). The contact mailer doubles as the verification-email sender.
+// Verification emails go out via Resend (RESEND_API_KEY) on hosts that block SMTP, else SMTP, else logged.
+const sender = makeSender(process.env);
 const gateway = await makeKeyGateway(root, {
     allowOrigin: process.env.ALLOW_ORIGIN, keysJson: process.env.GV_KEYS, dbPath,
-    mailer, publicUrl: process.env.PUBLIC_API_URL, verifyRedirect: process.env.VERIFY_REDIRECT || '/keys',
+    sender, publicUrl: process.env.PUBLIC_API_URL, verifyRedirect: process.env.VERIFY_REDIRECT || '/keys',
 });   // /v1 metered tiles + usage + self-serve keys
+console.log(`[v1] email transport: ${sender ? sender.kind : 'none (links logged)'}`);
 // Startup diagnostic (shows in the host's logs): how many /v1 keys loaded, and whether GV_KEYS was seen.
 console.log(`[v1] gateway ready: ${gateway.keyCount} key(s) loaded` +
     (process.env.GV_KEYS ? ` (GV_KEYS present, ${process.env.GV_KEYS.length} chars)` : ' (GV_KEYS not set)'));

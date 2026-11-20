@@ -5,6 +5,22 @@ A running status log. Newest entry on top. For architecture and the ship-it guid
 
 ---
 
+## 2026-11-20 (later) — Verification email via Resend (Railway blocks SMTP)
+
+- **Diagnosed the stuck verification emails by reading the live Railway logs** (via browser): the key
+  flow (mint → DB on volume → verify token → activate) all works — proven by completing a verification
+  with a token pulled from the logs (`/v1/verify` → 302 `/keys?verified=1`). The only failure was the
+  email transport: `[v1] verification email FAILED … SMTP timeout`. **Railway (Hobby) blocks outbound
+  SMTP**, so `mailer.mjs` → `smtp.zoho.com:465` times out regardless of credentials.
+- **Switched the transport to Resend (HTTPS API).** New `email.mjs` `makeSender(env)`: prefers Resend
+  (`RESEND_API_KEY`, a single `fetch` to `api.resend.com/emails`, from `MAIL_FROM`), falls back to SMTP
+  (`mailer.mjs`, self-host only), else logs the link. `keys.mjs` now takes a `sender` instead of a
+  `mailer`; `serve.mjs` builds it and logs `[v1] email transport: resend|smtp|none`. Dependency-free.
+  Verified locally: a fake `RESEND_API_KEY` produces a clean handled `Resend 401` with the link preserved,
+  so the request shape + error path are correct; a real key on Railway will send over 443 (not blocked).
+- **Railway to-do:** set `RESEND_API_KEY` + `MAIL_FROM` (on a Resend-verified domain); the Zoho `SMTP_*`
+  vars can be removed (they only time out there). `local.env`/README updated.
+
 ## 2026-11-20 (later) — SQLite database + email-verified API keys
 
 - **Keys/usage moved to a SQLite database** (`db.mjs`, Node's built-in `node:sqlite` — dependency-free,

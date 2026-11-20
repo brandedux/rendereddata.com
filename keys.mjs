@@ -11,7 +11,6 @@ import {readFile} from 'node:fs/promises';
 import {randomBytes} from 'node:crypto';
 import {join} from 'node:path';
 import {openDb} from './db.mjs';
-import {sendMail} from './mailer.mjs';
 
 // Which {body}/{tileset} maps to which manifest entry. Earth raster XYZ only; the planetary
 // mosaics need reprojection (see src/eqproj.js) and are not a straight redirect.
@@ -29,7 +28,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // opts: allowOrigin (CORS), keysJson (GV_KEYS seed), dbPath, mailer (from mailerFromEnv, for verify
 // emails), mailFrom/mailSubject, publicUrl (base for verify links), verifyRedirect (post-verify page).
 export async function makeKeyGateway(root, opts = {}) {
-    const {allowOrigin = '', keysJson = '', dbPath = '', mailer = null,
+    const {allowOrigin = '', keysJson = '', dbPath = '', sender = null,
         mailSubject = 'Verify your Rendered Data API key', publicUrl = '', verifyRedirect = '/keys'} = opts;
 
     const corsList = String(allowOrigin || '*').split(',').map((s) => s.trim()).filter(Boolean);
@@ -101,9 +100,9 @@ export async function makeKeyGateway(root, opts = {}) {
             'It starts working the moment you click the link above. The link expires in 24 hours.', '',
             "If you didn't request this, you can ignore this email."
         ].join('\n');
-        if (!mailer) { console.log(`[v1] SMTP not configured — verification link for ${email}: ${link}`); return; }
-        try { await sendMail({...mailer, to: email, subject: mailSubject, replyTo: email, text }); console.log(`[v1] verification email sent to ${email}`); }
-        catch (e) { console.error(`[v1] verification email FAILED for ${email} (key still pending): ${e.message} — link: ${link}`); }
+        if (!sender) { console.log(`[v1] no email transport configured — verification link for ${email}: ${link}`); return; }
+        try { await sender.send({to: email, subject: mailSubject, text}); console.log(`[v1] verification email sent to ${email} via ${sender.kind}`); }
+        catch (e) { console.error(`[v1] verification email FAILED for ${email} (${sender.kind}; key still pending): ${e.message} — link: ${link}`); }
     }
 
     async function mintKeyFromRequest(req, res) {

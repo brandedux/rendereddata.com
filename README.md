@@ -247,10 +247,12 @@ GET  /v1/verify?token=...                                  # confirm the email, 
 Self-serve keys (email-verified): `POST /v1/keys` mints a public `gv_pk_` key, stores it **unverified**,
 and emails a verification link (abuse-gated by a honeypot, a valid email, one verified key per email,
 and a per-IP cap). The key returns `403` until the recipient clicks `GET /v1/verify?token=…`, which
-activates it and redirects back to `/keys?verified=1`. Verification emails send over SMTP via
-`mailer.mjs` (e.g. Zoho — set `SMTP_*`); if SMTP is unset, the link is logged instead. The **`/keys`
-page** (`keys.html`) is the browser front-end — request form + usage lookup. `scopes` on each key is
-reserved for future entitlements (tiles today; data layers / other products later).
+activates it and redirects back to `/keys?verified=1`. Verification emails send via **Resend**
+(`email.mjs`, HTTPS — set `RESEND_API_KEY` + `MAIL_FROM` on a verified domain); SMTP (`mailer.mjs`) is a
+self-host fallback — but most PaaS (Railway included) **block outbound SMTP**, so Resend is required
+there. If neither is set, the link is logged. The **`/keys` page** (`keys.html`) is the browser
+front-end — request form + usage lookup. `scopes` on each key is reserved for future entitlements
+(tiles today; data layers / other products later).
 
 Tilesets map to manifest sources (`earth/bluemarble`, `earth/s2`, `earth/viirs`); the planetary
 mosaics need reprojection and are not a straight redirect. Returns 401 (no/invalid key), 403
