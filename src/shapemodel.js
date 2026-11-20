@@ -172,6 +172,9 @@ export class ShapeModel extends Emitter {
         this.overlay = document.createElement('div');   // holds feature pins
         this.overlay.style.cssText = 'position:absolute;inset:0;pointer-events:none;overflow:hidden;';
         host.appendChild(this.overlay);
+        this.skyOverlay = document.createElement('div');   // holds sky labels (Sun/planets/constellations)
+        this.skyOverlay.style.cssText = 'position:absolute;inset:0;pointer-events:none;overflow:hidden;';
+        host.appendChild(this.skyOverlay);
     }
     _fatal(msg) {
         const d = document.createElement('div');
@@ -189,7 +192,7 @@ export class ShapeModel extends Emitter {
         // Surface program: textured mesh with one simple directional (sun) light + ambient fill.
         this.progSurface = makeProgram(gl, VERT_SURFACE, FRAG_SURFACE);
         this.locS = attribsUniforms(gl, this.progSurface, ['a_pos', 'a_norm', 'a_uv'],
-            ['u_mvp', 'u_model', 'u_light', 'u_tex', 'u_ambient', 'u_planetDir', 'u_planetShine']);
+            ['u_mvp', 'u_model', 'u_light', 'u_tex', 'u_ambient', 'u_soft', 'u_planetDir', 'u_planetShine']);
         this.bufPos = buffer(gl, this.mesh.positions);
         this.bufNorm = buffer(gl, this.mesh.normals);
         this.bufUv = buffer(gl, this.mesh.uvs);
@@ -419,7 +422,8 @@ export class ShapeModel extends Emitter {
         // Stars/constellations/ecliptic sit at infinity, so they're drawn against a rotation-only view (no
         // translation) with depth off — they never parallax. The parent planet and sibling moons are REAL
         // objects in the scene, so they're drawn in the full (translating) view at their true positions.
-        if (this._sky?.active) this._drawSky(mul(proj, rotationOnly(view)));
+        if (this._sky?.active) { const skyMvp = mul(proj, rotationOnly(view)); this._drawSky(skyMvp); this._placeSkyLabels(skyMvp, eye); }
+        else if (this._skyLabels?.length) { for (const {el} of this._skyLabels) el.style.display = 'none'; }
         if (this._parentBody) this._drawParent(mvp);
         if (this.opts.showParent !== false) for (const sib of this._siblings) this._drawSibling(mvp, sib);
 
@@ -438,6 +442,7 @@ export class ShapeModel extends Emitter {
         gl.uniformMatrix4fv(this.locS.u_model, false, spin || IDENTITY);
         gl.uniform3fv(this.locS.u_light, lightDir);
         gl.uniform1f(this.locS.u_ambient, this._terminator ? 0.12 : 0.28);
+        gl.uniform1f(this.locS.u_soft, this._terminator ? 1 : 0);   // soft day/night band only in real-Sun mode
         // Planet-shine (earthshine): only with the terminator on and a parent present. Tint = the planet's
         // colour; brightness scales with how "full" the planet looks from the moon (its phase). The
         // planet direction is the sub-primary point; spin rotates the surface normals, not this fill light.
@@ -550,7 +555,7 @@ export class ShapeModel extends Emitter {
     addStarfield(opts = {}) {
         if (!this.gl) return this;
         const flags = Object.assign({stars: true, milkyWay: true, constellations: true, grid: false,
-            ecliptic: false, orbit: false, sun: true, planets: true, moon: true}, opts);
+            ecliptic: false, orbit: false, sun: true, planets: true, moon: true, labels: true}, opts);
         this._sky = {active: true, flags, time: opts.time ? new Date(opts.time) : new Date(),
             catalog: opts.catalog || Cel.STARS, magLimit: opts.magLimit ?? 6.5, buffers: {}};
         this._buildSky();
@@ -559,14 +564,15 @@ export class ShapeModel extends Emitter {
         this.emit('starfield', this._sky);
         return this._sky;
     }
-    removeStarfield() { this._sky = null; return this; }
+    removeStarfield() { this._sky = null; this._skyLabels = []; this.skyOverlay.replaceChildren(); return this; }
     /** Set the sky date/time; rotates the whole sky to that epoch. */
     setSkyTime(t) { if (this._sky) { this._sky.time = new Date(t); this._buildSky(); this._buildParentBody(); this._updateSun(); } return this; }
-    /** Toggle one sky layer: stars, milkyWay, constellations, grid, ecliptic, sun, planets, moon. */
+    /** Toggle one sky layer: stars, milkyWay, constellations, grid, ecliptic, sun, planets, moon, labels. */
     setSkyFlag(key, val) {
         if (!this._sky) return this;
         this._sky.flags[key] = !!val;
         if (key === 'sun' || key === 'planets' || key === 'moon') this._buildSkyBodies();
+        if (key === 'labels' || key === 'sun' || key === 'planets' || key === 'moon' || key === 'constellations') this._buildSkyLabels();
         return this;
     }
 
@@ -616,6 +622,53 @@ export class ShapeModel extends Emitter {
         this._skyLineBuf('ecl', ecl);
 
         this._buildSkyBodies();
+        this._buildSkyLabels();
+    }
+
+    // DOM text labels for the named sky objects — the Sun/planets/Moon and the constellation figures —
+    // oriented in this body's world frame (like the stars), projected to screen each frame by
+    // _placeSkyLabels. Rebuilt whenever the sky, its epoch, or a relevant flag changes.
+    _buildSkyLabels() {
+        this.skyOverlay.replaceChildren();
+        this._skyLabels = [];
+        const S = this._sky; if (!S || !S.flags.labels) return;
+        const {d, T} = Cel.julian(S.time), el = Cel.iauElements(this.body, d, T), dir = (c) => this._skyDir(c, el);
+        const add = (text, cel, color, cls) => {
+            const span = document.createElement('span');
+            span.textContent = text;
+            span.style.cssText = `position:absolute;transform:translate(6px,-50%);white-space:nowrap;pointer-events:none;` +
+                `font:11px var(--gv-font-mono,ui-monospace,monospace);color:${color};text-shadow:0 1px 2px rgba(0,0,0,.9);${cls}`;
+            this.skyOverlay.appendChild(span);
+            this._skyLabels.push({el: span, dir: norm(dir(cel))});
+        };
+        // Solar-system bodies: each gated by its own layer flag (so hiding the Sun hides its label too).
+        for (const b of Cel.skyBodies(this.body, S.time)) {
+            if ((b.kind === 'sun' && !S.flags.sun) || (b.kind === 'moon' && !S.flags.moon)
+                || ((b.kind === 'planet' || b.kind === 'earth') && !S.flags.planets)) continue;
+            add(b.name, Cel.eqToVec(b.ra, b.dec), b.color || '#dfe7f2', '');
+        }
+        // Constellation names, anchored at each figure's label point — only when the figures are shown.
+        if (S.flags.constellations) for (const con of Cel.CONSTELLATIONS) {
+            if (!con.label) continue;
+            add(con.name.toUpperCase(), Cel.eqToVec(con.label[0], con.label[1]), 'rgba(150,180,220,.75)', 'letter-spacing:.08em;font-size:9px;');
+        }
+    }
+
+    // Project each sky label (a direction at infinity) through the rotation-only sky view and hide the
+    // ones the body occludes (its line of sight passes through the ~unit body in front of the camera).
+    _placeSkyLabels(skyMvp, eye) {
+        const labels = this._skyLabels;
+        if (!labels || !labels.length) return;
+        const w = this._vw, h = this._vh, R2 = 1.1 * 1.1;   // body radius² (unit mesh, slight margin)
+        for (const {el, dir: v} of labels) {
+            const ed = eye[0] * v[0] + eye[1] * v[1] + eye[2] * v[2];
+            const occluded = ed < 0 && (eye[0] * eye[0] + eye[1] * eye[1] + eye[2] * eye[2] - ed * ed) < R2;
+            const clip = mulVec(skyMvp, [v[0], v[1], v[2], 1]);
+            if (occluded || clip[3] <= 0) { el.style.display = 'none'; continue; }
+            el.style.display = '';
+            el.style.left = (clip[0] / clip[3] * 0.5 + 0.5) * w + 'px';
+            el.style.top = (1 - (clip[1] / clip[3] * 0.5 + 0.5)) * h + 'px';
+        }
     }
 
     _buildSkyBodies() {
@@ -862,6 +915,7 @@ export class ShapeModel extends Emitter {
         gl.uniformMatrix4fv(this.locS.u_model, false, spin);
         gl.uniform3fv(this.locS.u_light, this._sunWorld);
         gl.uniform1f(this.locS.u_ambient, 0.14);
+        gl.uniform1f(this.locS.u_soft, 1);   // a sibling moon is a real body, always soft-lit by the real Sun
         gl.uniform3fv(this.locS.u_planetDir, [0, 0, 1]);
         gl.uniform3fv(this.locS.u_planetShine, [0, 0, 0]);
         gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sib.tex); gl.uniform1i(this.locS.u_tex, 0);
@@ -1110,7 +1164,7 @@ export class ShapeModel extends Emitter {
         this._running = false; cancelAnimationFrame(this._raf); this._ro?.disconnect();
         const g = this.gl;
         if (g) { const lose = g.getExtension('WEBGL_lose_context'); lose?.loseContext(); }
-        this.canvas?.remove(); this.overlay?.remove();
+        this.canvas?.remove(); this.overlay?.remove(); this.skyOverlay?.remove();
         this.el.classList.remove('gv-shape');
     }
 }
@@ -1345,13 +1399,18 @@ varying vec3 v_norm; varying vec2 v_uv;
 void main() { v_uv = a_uv; v_norm = mat3(u_model) * a_norm; gl_Position = u_mvp * vec4(a_pos, 1.0); }`;
 const FRAG_SURFACE = `
 precision highp float;
-uniform sampler2D u_tex; uniform vec3 u_light; uniform float u_ambient;
+uniform sampler2D u_tex; uniform vec3 u_light; uniform float u_ambient; uniform float u_soft;
 uniform vec3 u_planetDir; uniform vec3 u_planetShine;   // "planet-shine": reflected light from the primary
 varying vec3 v_norm; varying vec2 v_uv;
 void main() {
   vec3 n = normalize(v_norm);
-  float lambert = max(dot(n, normalize(u_light)), 0.0);
-  float shade = u_ambient + (1.0 - u_ambient) * lambert;      // direct sunlight (white)
+  float ndl = dot(n, normalize(u_light));
+  // u_soft on (real-Sun day/night): a soft terminator band over the raised night floor, so the day→night
+  // line reads as real twilight on the actual terrain — matching the parent planet. Off (headlight): a
+  // plain lambert so the near side stays evenly lit while you inspect the shape.
+  float shade = u_soft > 0.5
+    ? u_ambient + (1.0 - u_ambient) * smoothstep(-0.15, 0.40, ndl)
+    : u_ambient + (1.0 - u_ambient) * max(ndl, 0.0);
   vec3 base = texture2D(u_tex, v_uv).rgb;
   vec3 lit = base * shade;
   // Planet-shine: the night side facing the primary glows with its reflected (tinted) light — the

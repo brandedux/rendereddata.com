@@ -5,7 +5,7 @@ A running status log. Newest entry on top. For architecture and the ship-it guid
 
 ---
 
-## 2026-11-19 — og-image, API keys Phase 1 + /v1 CORS + catalog, SDK hosted tiles, mesh raster overlays, dedupe, header CTA (post-v1)
+## 2026-11-19 — og-image, API keys Phase 1 + /v1 CORS + catalog, SDK hosted tiles, mesh raster overlays + soft terminator + sky labels, dedupe, header CTA (post-v1)
 
 **Uncommitted follow-ups on top of v1 (`0fce660`), except the og-image commit noted below. Verified in-browser.**
 
@@ -83,10 +83,25 @@ A running status log. Newest entry on top. For architecture and the ship-it guid
   browser on Phobos**: a generated equirect grid with a marker at lon 49 draped aligned under the Stickney
   pin, hugging the lumpy mesh, no console errors. README documents it.
 
-**Other open build items (not started this session):** mesh day/night terminator + sky labels; API keys
-Phase 3 self-serve (`POST /v1/keys` + `/keys` dashboard, gating policy A vs B); Ganymede feature pins not
-eye-verified to sub-degree; production smoke-test of hosted tiles against the live Railway gateway (needs
-the deployed base URL + a key).
+- **Mesh day/night terminator + sky labels — done.**
+  - *Soft terminator:* the body surface shader (`FRAG_SURFACE`) gained a `u_soft` path that, in real-Sun
+    mode, replaces the hard lambert cut with a `smoothstep(-0.15, 0.40, ndl)` band over the raised night
+    floor — the same soft terminator the parent planet already used. Headlight mode stays plain lambert.
+    Sibling moons (always Sun-lit) use the soft path too. Verified on Phobos: a soft twilight gradient,
+    dim-but-not-void night side.
+  - *Sky labels:* ported DOM text labels for the named sky objects — the Sun/planets/Moon (from
+    `Cel.skyBodies`, colored per body) and constellation names (`Cel.CONSTELLATIONS[].label`) — in a new
+    `skyOverlay`, oriented in the body's world frame like the stars and projected each frame through the
+    rotation-only sky view (`_buildSkyLabels` / `_placeSkyLabels`). Labels the body occludes are hidden
+    via an exact line-of-sight test against the unit mesh. New `labels` sky flag (default on), rebuilt on
+    relevant `setSkyFlag` changes. Playground "Show the sky" → **Labels** checkbox now drives them on the
+    mesh (renamed from "Star labels"; also still drives the globe's star labels). Verified on Phobos: 11
+    labels built (Sun, 5 planets, 5 constellations), correctly projected/colored and occlusion-culled, no
+    console errors.
+
+**Other open build items (not started this session):** API keys Phase 3 self-serve (`POST /v1/keys` +
+`/keys` dashboard, gating policy A vs B); Ganymede feature pins not eye-verified to sub-degree; production
+smoke-test of hosted tiles against the live Railway gateway (needs the deployed base URL + a key).
 
 ## 2026-11-15 (evening) — True-scale moon systems, orbits, scientific accuracy, capture (post-v1)
 

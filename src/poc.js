@@ -762,7 +762,8 @@ map.on('error', (e) => {
 const skyFlags = () => ({
     milkyWay: $('sky-milky').checked, constellations: $('sky-const').checked,
     sun: $('sky-bodies').checked, moon: $('sky-bodies').checked, planets: $('sky-bodies').checked,
-    starLabels: $('sky-labels').checked, grid: $('sky-grid').checked, ecliptic: $('sky-ecl').checked,
+    starLabels: $('sky-labels').checked, labels: $('sky-labels').checked,   // starLabels: globe; labels: mesh (Sun/planet/constellation names)
+    grid: $('sky-grid').checked, ecliptic: $('sky-ecl').checked,
     orbit: $('sky-orbit').checked
 });
 const skyTime = () => ($('sky-time').value ? new Date($('sky-time').value) : new Date());
@@ -809,6 +810,8 @@ $('sky-toggle').addEventListener('change', async (e) => {
 });
 for (const [id, key] of [['sky-milky', 'milkyWay'], ['sky-const', 'constellations'], ['sky-labels', 'starLabels'], ['sky-grid', 'grid'], ['sky-ecl', 'ecliptic'], ['sky-orbit', 'orbit']])
     $(id).addEventListener('change', (ev) => sky?.set(key, ev.target.checked));
+// The same checkbox also drives the mesh sky's Sun/planet/constellation name labels (globe ignores 'labels').
+$('sky-labels').addEventListener('change', (ev) => sky?.set('labels', ev.target.checked));
 $('sky-bodies').addEventListener('change', (ev) => { for (const k of ['sun', 'moon', 'planets']) sky?.set(k, ev.target.checked); });
 $('sky-term').addEventListener('change', (ev) => {
     if (isShape(state.body)) return;   // the day/night terminator is a globe layer; mesh bodies skip it for now
